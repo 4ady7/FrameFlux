@@ -238,6 +238,10 @@ textarea:focus-visible,
   width: min(100%, 420px);
 }
 
+.variations[hidden] {
+  display: none !important;
+}
+
 .variation {
   display: grid;
   gap: 0.4rem;
