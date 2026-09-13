@@ -2,18 +2,41 @@ const form = document.querySelector("#film-form");
 const generateBtn = document.querySelector("#generate");
 const improveBtn = document.querySelector("#improve");
 const regenerateBtn = document.querySelector("#regenerate");
+const reimagineBtn = document.querySelector("#reimagine");
 const downloadBtn = document.querySelector("#download");
 const statusEl = document.querySelector("#status");
+const errorEl = document.querySelector("#error");
 const meta = document.querySelector("#meta");
+const variationsEl = document.querySelector("#variations");
+const posterFrame = document.querySelector("#poster-frame");
 
-const poster = window.FrameFluxPoster.createPoster("poster");
+const ROLES = ["signature", "hybrid", "alternative"];
+const SEED_SHIFTS = { signature: 0, hybrid: 101, alternative: 211 };
 
-let visualParams = null;
-let seed = Date.now() % 100000;
+const mainPoster = window.FrameFluxPoster.createPoster("poster", { pixelDensity: 2 });
+const thumbs = {
+  signature: window.FrameFluxPoster.createPoster("v-signature", { pixelDensity: 1 }),
+  hybrid: window.FrameFluxPoster.createPoster("v-hybrid", { pixelDensity: 1 }),
+  alternative: window.FrameFluxPoster.createPoster("v-alternative", { pixelDensity: 1 }),
+};
 
-function setStatus(message, isError = false) {
+let visualDna = null;
+let keyArt = null;
+let baseSeed = Date.now() % 100000;
+let selectedRole = "signature";
+
+function setStatus(message) {
   statusEl.textContent = message;
-  statusEl.classList.toggle("error", isError);
+  errorEl.hidden = true;
+  errorEl.textContent = "";
+}
+
+function setError(message) {
+  errorEl.hidden = !message;
+  errorEl.textContent = message || "";
+  if (message) {
+    statusEl.textContent = "";
+  }
 }
 
 function slugify(value) {
@@ -34,28 +57,65 @@ function filmPayload() {
   };
 }
 
-function selectedRegenMode() {
-  const picked = document.querySelector('input[name="regen-mode"]:checked');
-  return picked ? picked.value : "noise";
-}
-
-function showMeta(params) {
+function showMeta(dna) {
   meta.hidden = false;
-  document.querySelector("#meta-pattern").textContent = params.pattern;
-  document.querySelector("#meta-layout").textContent = params.layout;
-  const sourceLabel =
-    params.source === "ai" ? "AI parameters" : "local fallback";
-  const modeLabel = params.mode && params.mode !== "generate" ? ` · ${params.mode}` : "";
-  document.querySelector("#meta-source").textContent = sourceLabel + modeLabel;
+  const proc = dna.procedural || {};
+  document.querySelector("#meta-pattern").textContent =
+    `${proc.primaryPattern || dna.pattern} / ${proc.secondaryPattern || "–"}`;
+  document.querySelector("#meta-layout").textContent = (dna.composition && dna.composition.layout) || dna.layout;
+  const sourceLabel = dna.source === "ai" ? "AI DNA" : "local DNA";
+  const art = keyArt ? " · cinematic still" : " · local plate";
+  document.querySelector("#meta-source").textContent = sourceLabel + art;
 }
 
 function enablePosterActions(enabled) {
   improveBtn.disabled = !enabled;
   regenerateBtn.disabled = !enabled;
+  reimagineBtn.disabled = !enabled;
   downloadBtn.disabled = !enabled;
 }
 
-async function requestParams({ mode = "generate", previous = null } = {}) {
+function busy(isBusy) {
+  generateBtn.disabled = isBusy;
+  if (isBusy) {
+    enablePosterActions(false);
+  } else if (visualDna) {
+    enablePosterActions(true);
+  }
+}
+
+function seedFor(role) {
+  return baseSeed + SEED_SHIFTS[role];
+}
+
+function renderAll() {
+  if (!visualDna) {
+    return;
+  }
+  for (const role of ROLES) {
+    thumbs[role].render(visualDna, seedFor(role), role, keyArt);
+  }
+  mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, keyArt);
+  variationsEl.hidden = false;
+  updateSelectionUi();
+  const title = visualDna.concept?.title || visualDna.title || "poster";
+  posterFrame.querySelector("#poster").setAttribute("aria-label", `Selected ${selectedRole} poster for ${title}`);
+}
+
+function updateSelectionUi() {
+  document.querySelectorAll(".variation").forEach((btn) => {
+    btn.setAttribute("aria-pressed", btn.dataset.role === selectedRole ? "true" : "false");
+  });
+}
+
+function previousPayload() {
+  if (!visualDna) {
+    return null;
+  }
+  return visualDna;
+}
+
+async function requestDna({ mode = "generate", previous = null } = {}) {
   const payload = {
     ...filmPayload(),
     mode,
@@ -70,108 +130,124 @@ async function requestParams({ mode = "generate", previous = null } = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.error || "Could not generate visual parameters.");
+    throw new Error(data.error || "Could not create Visual DNA.");
   }
   return data;
 }
 
-async function composePoster({ mode = "generate", previous = null, statusMessage }) {
-  setStatus(statusMessage);
-  visualParams = await requestParams({ mode, previous });
-  seed = Math.floor(Math.random() * 1_000_000);
-  poster.render(visualParams, seed);
-  enablePosterActions(true);
-  showMeta(visualParams);
-  const quoteBit = visualParams.quote ? ` · “${visualParams.quote}”` : "";
-  setStatus(
-    visualParams.mood
-      ? `${mode === "improve" ? "Improved" : mode === "background" ? "New background" : "New design"} · ${visualParams.mood}${quoteBit}`
-      : "Poster ready."
-  );
+async function requestImage(dna) {
+  const response = await fetch("api/image.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dna }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return null;
+  }
+  if (!data.image) {
+    return null;
+  }
+  return mainPoster.loadImage(data.image);
+}
+
+async function compose({ mode, previous, interpreting }) {
+  setError("");
+  setStatus(interpreting);
+  visualDna = await requestDna({ mode, previous });
+  setStatus("Creating Visual DNA…");
+  setStatus("Generating cinematic key art…");
+  keyArt = await requestImage(visualDna);
+  setStatus("Building FrameFlux variations…");
+  baseSeed = Math.floor(Math.random() * 1_000_000);
+  selectedRole = "signature";
+  renderAll();
+  showMeta(visualDna);
+  const quote = visualDna.concept?.quote || visualDna.quote || "";
+  const mood = visualDna.concept?.mood || visualDna.mood || "";
+  const verb = mode === "improve" ? "Improved" : mode === "reimagine" ? "Reimagined" : "New design";
+  setStatus(`${verb}${mood ? ` · ${mood}` : ""}${quote ? ` · “${quote}”` : ""}`);
 }
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  generateBtn.disabled = true;
-  improveBtn.disabled = true;
-  regenerateBtn.disabled = true;
+  busy(true);
   try {
     await document.fonts.ready;
-    await composePoster({
+    await compose({
       mode: "generate",
-      statusMessage: "Interpreting the film and composing a poster…",
+      interpreting: "Interpreting the film…",
     });
   } catch (error) {
-    setStatus(error.message, true);
+    setError(error.message);
   } finally {
-    generateBtn.disabled = false;
-    if (visualParams) {
-      enablePosterActions(true);
-    }
+    busy(false);
   }
 });
 
 improveBtn.addEventListener("click", async () => {
-  if (!visualParams) {
+  if (!visualDna) {
     return;
   }
-  generateBtn.disabled = true;
-  improveBtn.disabled = true;
-  regenerateBtn.disabled = true;
+  busy(true);
   try {
-    await composePoster({
+    await compose({
       mode: "improve",
-      previous: visualParams,
-      statusMessage: "Sending the current design back for a stronger pass…",
+      previous: previousPayload(),
+      interpreting: "Sending the current design back for a stronger pass…",
     });
   } catch (error) {
-    setStatus(error.message, true);
+    setError(error.message);
   } finally {
-    generateBtn.disabled = false;
-    if (visualParams) {
-      enablePosterActions(true);
-    }
+    busy(false);
   }
 });
 
-regenerateBtn.addEventListener("click", async () => {
-  if (!visualParams) {
+reimagineBtn.addEventListener("click", async () => {
+  if (!visualDna) {
     return;
   }
-
-  const regenMode = selectedRegenMode();
-  if (regenMode === "noise") {
-    seed = Math.floor(Math.random() * 1_000_000);
-    poster.render(visualParams, seed);
-    setStatus("Noise re-rolled. Palette, pattern, layout, and quote are unchanged.");
-    return;
-  }
-
-  generateBtn.disabled = true;
-  improveBtn.disabled = true;
-  regenerateBtn.disabled = true;
+  busy(true);
   try {
-    await composePoster({
-      mode: "background",
-      previous: visualParams,
-      statusMessage: "Asking AI for a new background from the pitch…",
+    await compose({
+      mode: "reimagine",
+      previous: previousPayload(),
+      interpreting: "Asking for a new interpretation of the same film…",
     });
   } catch (error) {
-    setStatus(error.message, true);
+    setError(error.message);
   } finally {
-    generateBtn.disabled = false;
-    if (visualParams) {
-      enablePosterActions(true);
-    }
+    busy(false);
   }
+});
+
+regenerateBtn.addEventListener("click", () => {
+  if (!visualDna) {
+    return;
+  }
+  baseSeed = Math.floor(Math.random() * 1_000_000);
+  renderAll();
+  setStatus("Same Visual DNA and cinematic still. New procedural execution.");
 });
 
 downloadBtn.addEventListener("click", () => {
-  if (!visualParams) {
+  if (!visualDna) {
     return;
   }
-  poster.download(`frameflux-${slugify(visualParams.title)}`);
+  const title = visualDna.concept?.title || visualDna.title || "poster";
+  mainPoster.download(`frameflux-${slugify(title)}-${selectedRole}`);
+});
+
+variationsEl.addEventListener("click", (event) => {
+  const btn = event.target.closest(".variation");
+  if (!btn || !visualDna) {
+    return;
+  }
+  selectedRole = btn.dataset.role;
+  mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, keyArt);
+  updateSelectionUi();
+  const title = visualDna.concept?.title || visualDna.title || "poster";
+  posterFrame.querySelector("#poster").setAttribute("aria-label", `Selected ${selectedRole} poster for ${title}`);
 });
