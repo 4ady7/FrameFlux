@@ -262,17 +262,27 @@ function drawCinematicPlate(p, dna, spec, seed) {
 
   // Soft figure / subject mass at the focal point — reads as photography, not a glyph.
   p.noStroke();
-  p.fill(...primary, 90);
-  p.ellipse(nx(fx), ny(fy + 0.04), POSTER_W * 0.22, POSTER_H * 0.42);
-  p.fill(...bg, 120);
-  p.ellipse(nx(fx), ny(fy - 0.02), POSTER_W * 0.12, POSTER_H * 0.14);
+  p.fill(...primary, 130);
+  p.ellipse(nx(fx), ny(fy + 0.06), POSTER_W * 0.28, POSTER_H * 0.5);
+  p.fill(...bg, 160);
+  p.ellipse(nx(fx), ny(fy - 0.01), POSTER_W * 0.14, POSTER_H * 0.16);
+  p.fill(...accent, 28);
+  p.ellipse(nx(fx + 0.12), ny(fy - 0.18), POSTER_W * 0.55, POSTER_H * 0.22);
 
-  for (let i = 0; i < 1400; i += 1) {
+  p.stroke(...secondary, 40);
+  p.strokeWeight(1.2);
+  for (let i = 0; i < 8; i += 1) {
+    const x = nx(0.08 + i * 0.12);
+    p.line(x, ny(horizon), x + (p.noise(i) - 0.5) * 40, ny(0.92));
+  }
+
+  for (let i = 0; i < 2200; i += 1) {
     const x = p.random(POSTER_W);
     const y = p.random(POSTER_H);
     const n = p.noise(x * 0.01, y * 0.01);
-    p.fill(255, 255, 255, 6 + n * 10);
-    p.rect(x, y, 1, 1);
+    p.noStroke();
+    p.fill(255, 255, 255, 10 + n * 16);
+    p.rect(x, y, 1.2, 1.2);
   }
 
   p.noFill();
@@ -357,7 +367,7 @@ function drawFlowField(p, dna, seed, sampler, spec, weight) {
     const lum = sampler.at(u, v);
     const mix = i / count;
     const c = mix < 0.45 ? pal.primary : mix < 0.8 ? pal.secondary : pal.accent;
-    p.stroke(...hexToRgb(c), 28 + lum * 50);
+    p.stroke(...hexToRgb(c), 90 + lum * 80);
     p.beginShape();
     for (let s = 0; s < 36; s += 1) {
       const uu = x / POSTER_W;
@@ -403,7 +413,7 @@ function drawGrid(p, dna, seed, sampler, spec, weight) {
       p.push();
       p.translate(x * cellW + cellW / 2, y * cellH + cellH / 2);
       p.rotate(edge > 0.12 ? p.QUARTER_PI / 5 : 0);
-      p.stroke(...hexToRgb(lum > 0.5 ? pal.accent : pal.primary), 40 * protect * weight);
+      p.stroke(...hexToRgb(lum > 0.5 ? pal.accent : pal.primary), 90 * protect * weight);
       p.rectMode(p.CENTER);
       p.rect(0, 0, (cellW - inset) * weight, (cellH - inset * 0.6) * weight);
       p.pop();
@@ -437,7 +447,7 @@ function drawParticles(p, dna, seed, sampler, spec, weight) {
     const tier = p.random();
     const r = tier < 0.7 ? p.random(0.8, 1.8) : tier < 0.93 ? p.random(2.2, 4.5) : p.random(5, 9);
     const c = tier < 0.6 ? pal.primary : tier < 0.85 ? pal.secondary : pal.accent;
-    p.fill(...hexToRgb(c), 40 + lum * 110 * protect * weight);
+    p.fill(...hexToRgb(c), 90 + lum * 120 * protect * weight);
     p.circle(nx(u), ny(v), r * weight);
   }
 }
@@ -455,7 +465,7 @@ function drawRings(p, dna, seed, sampler, spec, weight) {
     const t = i / rings;
     const rx = POSTER_W * (0.08 + t * 0.55);
     const ry = POSTER_H * (0.05 + t * 0.38) * (0.78 + p.noise(i * 0.2) * 0.4);
-    const alpha = (70 - t * 50) * weight;
+    const alpha = (140 - t * 70) * weight;
     p.stroke(...hexToRgb(i % 3 === 0 ? pal.accent : pal.secondary), alpha);
     p.push();
     p.translate(nx(fx), ny(fy));
@@ -509,7 +519,7 @@ function drawMesh(p, dna, seed, sampler, spec, weight) {
       if (protect < 0.22) {
         continue;
       }
-      const alpha = (24 + a.edge * 90) * protect * weight;
+      const alpha = (55 + a.edge * 120) * protect * weight;
       p.stroke(...hexToRgb(a.edge > 0.1 ? pal.accent : pal.primary), alpha);
       p.triangle(a.x, a.y, b.x, b.y, c.x, c.y);
     }
@@ -696,8 +706,7 @@ function createPoster(containerId, options = {}) {
       const sampler = buildSampler(p);
       const intensity = Number(dnaProc(current).intensity || 0.55);
       p.push();
-      p.drawingContext.globalAlpha = 0.38 + intensity * 0.12;
-      p.blendMode(p.OVERLAY);
+      p.blendMode(p.BLEND);
       for (const layer of patternPlan(current, role)) {
         drawPattern(
           p,
@@ -706,7 +715,7 @@ function createPoster(containerId, options = {}) {
           seed + layer.seedShift,
           sampler,
           spec,
-          layer.weight * (0.7 + intensity * 0.3)
+          layer.weight * (0.85 + intensity * 0.35)
         );
       }
       p.pop();
