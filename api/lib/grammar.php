@@ -158,7 +158,7 @@ function genreGrammar(string $family): array
             'groundTone' => 'light',
             'materials' => ['paper', 'glass', 'foil', 'cardstock', 'linen'],
             'textures' => ['glossy', 'scratched', 'distressed', 'smooth'],
-            'metaphors' => ['chaotic-key', 'chandelier-cluster', 'tangled-cords', 'keyhole', 'silhouette-threshold'],
+            'metaphors' => ['chaotic-key', 'chandelier-cluster', 'tangled-cords', 'keyhole'],
             'lightingStyles' => ['high-key', 'theatrical', 'practical'],
             'compositionGrammars' => ['asymmetric', 'diagonal', 'crowded'],
             'proceduralPrimary' => ['chaotic', 'linear'],
@@ -169,7 +169,7 @@ function genreGrammar(string $family): array
             'patterns' => ['flow', 'particles'],
             'spatialFeelings' => ['fragmented', 'claustrophobic', 'expanding'],
             'humanElements' => ['paired-objects', 'signage'],
-            'titlePlacementBias' => ['split', 'lower-third', 'upper-third'],
+            'titlePlacementBias' => ['lower-third', 'upper-third'],
             'titleTreatmentBias' => ['solid', 'layered', 'fragmented'],
             'quoteStyleBias' => ['caption', 'handwritten'],
             'narrativeEnergyDefault' => 0.82,
@@ -252,9 +252,9 @@ function genreGrammar(string $family): array
             'quoteStyleBias' => ['editorial-italic', 'typewriter', 'handwritten'],
             'narrativeEnergyDefault' => 0.42,
             'palettePresets' => [
-                ['bg' => '#EFE6D8', 'ink' => '#2A2420', 'acc' => '#7A1F33', 'hi' => '#C9A227', 'mute' => '#8A8178'],
-                ['bg' => '#F4EDE3', 'ink' => '#3A3028', 'acc' => '#6B2434', 'hi' => '#D4B46A', 'mute' => '#7A6E62'],
-                ['bg' => '#E8DFD2', 'ink' => '#241E1A', 'acc' => '#8B3A4A', 'hi' => '#BFA46A', 'mute' => '#9A8B7A'],
+                ['bg' => '#F0E6D6', 'ink' => '#241814', 'acc' => '#6A1228', 'hi' => '#C9A227', 'mute' => '#6E655C'],
+                ['bg' => '#EDE4D4', 'ink' => '#1E1612', 'acc' => '#5C0E22', 'hi' => '#D4B46A', 'mute' => '#7A7168'],
+                ['bg' => '#F3E9DA', 'ink' => '#2A1C18', 'acc' => '#7A1830', 'hi' => '#C4A056', 'mute' => '#8A7E72'],
             ],
         ],
         'drama' => [
@@ -605,8 +605,13 @@ function isTechFamily(string $family): bool
 const FRAMEFLUX_TECH_PATTERNS = ['grid', 'mesh'];
 const FRAMEFLUX_TECH_LINES = ['circuitry', 'wiring'];
 
-function layoutForComposition(string $grammar, int $seed): string
+function layoutForComposition(string $grammar, int $seed, string $family = 'drama'): string
 {
+    // Comedy titles are often long and hyphenated; a 40% split column
+    // forces character-breaks. Keep comedy in full-width off-center layouts.
+    if ($family === 'comedy') {
+        return $seed % 2 === 0 ? 'off-center-top' : 'off-center-bottom';
+    }
     return match ($grammar) {
         'asymmetric', 'crowded' => $seed % 2 === 0 ? 'off-center-top' : 'off-center-bottom',
         'diagonal' => 'split-editorial',

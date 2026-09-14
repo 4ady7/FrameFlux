@@ -182,16 +182,17 @@ function measureStyled(ctx, face, size, str) {
 }
 
 /**
- * Split a word that can never fit on one line into chunks that can, so a long
- * unbroken title hard-breaks instead of running past the safe width.
+ * Character-break a fragment that still cannot fit, adding a hyphen only when
+ * the fragment does not already end on one.
  */
-function breakLongWord(ctx, face, size, word, maxWidth) {
+function breakByCharacters(ctx, face, size, word, maxWidth) {
   const chunks = [];
   let chunk = "";
   for (const ch of word) {
     const next = chunk + ch;
-    if (chunk && measureStyled(ctx, face, size, `${next}-`) > maxWidth) {
-      chunks.push(`${chunk}-`);
+    const probe = /[-–—]$/.test(next) ? next : `${next}-`;
+    if (chunk && measureStyled(ctx, face, size, probe) > maxWidth) {
+      chunks.push(/[-–—]$/.test(chunk) ? chunk : `${chunk}-`);
       chunk = ch;
     } else {
       chunk = next;
@@ -201,6 +202,27 @@ function breakLongWord(ctx, face, size, word, maxWidth) {
     chunks.push(chunk);
   }
   return chunks.length ? chunks : [word];
+}
+
+/**
+ * Split a word that can never fit on one line into chunks that can.
+ * Prefer existing hyphens (RENT-A-MANSION → RENT-A- / MANSION) so titles do
+ * not character-break in the middle of a segment.
+ */
+function breakLongWord(ctx, face, size, word, maxWidth) {
+  const parts = String(word).split(/(?<=[-–—])/).filter(Boolean);
+  if (parts.length > 1) {
+    const packed = [];
+    for (const part of parts) {
+      if (measureStyled(ctx, face, size, part) > maxWidth) {
+        packed.push(...breakByCharacters(ctx, face, size, part, maxWidth));
+      } else {
+        packed.push(part);
+      }
+    }
+    return packed.length ? packed : [word];
+  }
+  return breakByCharacters(ctx, face, size, word, maxWidth);
 }
 
 function wrapStyled(ctx, face, size, text, maxWidth, maxLines) {
@@ -220,14 +242,15 @@ function wrapStyled(ctx, face, size, text, maxWidth, maxLines) {
   const lines = [];
   let current = "";
   for (let i = 0; i < words.length; i += 1) {
-    const next = current ? `${current} ${words[i]}` : words[i];
+    const glue = /[-–—]$/.test(current) ? "" : " ";
+    const next = current ? `${current}${glue}${words[i]}` : words[i];
     const isLastSlot = lines.length === maxLines - 1;
     if (measureStyled(ctx, face, size, next) > maxWidth && current) {
       if (isLastSlot) {
         // Rejoin without reintroducing spaces inside a hard-broken word.
         let clipped = [current]
           .concat(words.slice(i))
-          .join(" ")
+          .reduce((acc, part) => (acc && /[-–—]$/.test(acc) ? acc + part : acc ? `${acc} ${part}` : part), "")
           .replace(/-\s+/g, "-");
         while (
           clipped.length > 1 &&
@@ -646,7 +669,8 @@ function drawDirectionalLight(p, dna, seed, fx, fy) {
     ny(fy),
     POSTER_H * 0.75
   );
-  shade.addColorStop(0, `rgba(0,0,0,${shadeStrength})`);
+  const shadeRgb = lightGround ? hexToRgb(pal.text || pal.ink || "#1a1410") : [0, 0, 0];
+  shade.addColorStop(0, `rgba(${shadeRgb[0]},${shadeRgb[1]},${shadeRgb[2]},${shadeStrength})`);
   shade.addColorStop(1, "rgba(0,0,0,0)");
   p.drawingContext.fillStyle = shade;
   p.drawingContext.fillRect(0, 0, POSTER_W, POSTER_H);
@@ -841,79 +865,139 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
     p.circle(0, 0, 14);
     p.fill(...accent, 255);
     p.circle(0, 0, 6);
-  } else if (
-    metaphor === "correspondence-clock" ||
-    metaphor === "handwritten-letter" ||
-    metaphor === "postcard" ||
-    metaphor === "railway-route" ||
-    metaphor === "paired-objects" ||
-    metaphor === "weathered-door"
-  ) {
+  } else if (metaphor === "correspondence-clock") {
     p.rectMode(p.CENTER);
-    if (metaphor === "weathered-door") {
-      p.noStroke();
-      p.fill(...primary, 190);
-      p.rect(0, 0, POSTER_W * 0.34 * scale, POSTER_H * 0.58 * scale, 4);
-      p.fill(...bg, 160);
-      p.rect(0, -POSTER_H * 0.04 * scale, POSTER_W * 0.22 * scale, POSTER_H * 0.38 * scale);
-      p.fill(...accent, 200);
-      p.circle(POSTER_W * 0.1 * scale, 0, 14 * scale);
-    } else if (metaphor === "paired-objects") {
-      p.noStroke();
-      p.fill(...secondary, 200);
-      p.ellipse(-POSTER_W * 0.1 * scale, 8, POSTER_W * 0.16 * scale, POSTER_H * 0.08 * scale);
-      p.ellipse(POSTER_W * 0.12 * scale, 4, POSTER_W * 0.16 * scale, POSTER_H * 0.08 * scale);
-      p.fill(...primary, 120);
-      p.rect(-POSTER_W * 0.1 * scale, -20, 8, 36, 3);
-      p.rect(POSTER_W * 0.12 * scale, -24, 8, 36, 3);
-    } else {
-      const sheets = metaphor === "correspondence-clock" ? 8 : 3;
-      for (let i = 0; i < sheets; i += 1) {
-        p.push();
-        const ang = (i / sheets) * p.TWO_PI;
-        p.rotate(metaphor === "correspondence-clock" ? ang : (i - sheets / 2) * 0.14);
-        p.noStroke();
-        p.fill(0, 0, 0, 28);
-        p.rect(8, 10, POSTER_W * 0.34 * scale, POSTER_H * 0.16 * scale);
-        p.fill(...secondary, 220 - i * 10);
-        p.rect(0, 0, POSTER_W * 0.34 * scale, POSTER_H * 0.16 * scale);
-        p.stroke(...primary, 90);
-        p.strokeWeight(1);
-        p.line(-POSTER_W * 0.12 * scale, -8, POSTER_W * 0.12 * scale, -4);
-        p.line(-POSTER_W * 0.11 * scale, 4, POSTER_W * 0.1 * scale, 8);
-        p.pop();
+    p.noFill();
+    p.stroke(...accent, 80);
+    p.strokeWeight(1.5);
+    for (let i = 0; i < 7; i += 1) {
+      p.beginShape();
+      for (let x = -POSTER_W * 0.48; x < POSTER_W * 0.48; x += 12) {
+        p.vertex(x * scale, (Math.sin(x * 0.014 + i) * 20 + i * 16 - 64) * scale);
       }
-      p.noStroke();
-      p.fill(...accent, 70);
-      p.ellipse(POSTER_W * 0.1 * scale, POSTER_H * 0.1 * scale, 56 * scale, 36 * scale);
-      if (metaphor === "correspondence-clock" || metaphor === "railway-route") {
-        p.noFill();
-        p.stroke(...primary, 200);
-        p.strokeWeight(3.2);
-        p.circle(0, 0, POSTER_W * 0.58 * scale);
-        p.strokeWeight(5);
-        p.line(0, 0, 0, -POSTER_H * 0.16 * scale);
-        p.strokeWeight(3.5);
-        p.line(0, 0, POSTER_W * 0.14 * scale, 22 * scale);
-        p.fill(...accent, 230);
-        p.noStroke();
-        p.circle(0, 0, 12);
-        p.noFill();
-        p.stroke(...accent, 110);
-        p.strokeWeight(1.6);
-        for (let i = 0; i < 6; i += 1) {
-          p.beginShape();
-          for (let x = -POSTER_W * 0.46; x < POSTER_W * 0.46; x += 14) {
-            p.vertex(x, Math.sin(x * 0.018 + i) * 16 + i * 16 - 48);
-          }
-          p.endShape();
-        }
-      }
-      if (metaphor === "postcard") {
-        p.stroke(...accent, 140);
-        p.line(0, -POSTER_H * 0.12 * scale, 0, POSTER_H * 0.12 * scale);
-      }
+      p.endShape();
     }
+    p.noStroke();
+    const highlight = hexToRgb(pal.highlight || pal.accent);
+    for (let i = 0; i < 8; i += 1) {
+      p.fill(...highlight, 160);
+      p.circle((-POSTER_W * 0.28 + i * 42) * scale, (-52 + Math.sin(i) * 18) * scale, 5 * scale);
+    }
+    const sheets = 9;
+    for (let i = 0; i < sheets; i += 1) {
+      p.push();
+      p.rotate((i / sheets) * p.TWO_PI + 0.12);
+      p.translate(0, -POSTER_H * 0.09 * scale);
+      p.noStroke();
+      p.fill(0, 0, 0, 28);
+      p.rect(5, 7, POSTER_W * 0.2 * scale, POSTER_H * 0.13 * scale);
+      p.fill(245, 236, 220, 240);
+      p.rect(0, 0, POSTER_W * 0.2 * scale, POSTER_H * 0.13 * scale);
+      p.fill(...accent, 170);
+      p.triangle(
+        -POSTER_W * 0.1 * scale,
+        -POSTER_H * 0.065 * scale,
+        POSTER_W * 0.1 * scale,
+        -POSTER_H * 0.065 * scale,
+        0,
+        POSTER_H * 0.008 * scale
+      );
+      p.stroke(...primary, 130);
+      p.strokeWeight(1);
+      p.line(-POSTER_W * 0.06 * scale, 10, POSTER_W * 0.05 * scale, 12);
+      p.line(-POSTER_W * 0.055 * scale, 18, POSTER_W * 0.04 * scale, 20);
+      p.pop();
+    }
+    p.noStroke();
+    p.fill(...accent, 55);
+    p.ellipse(POSTER_W * 0.16 * scale, POSTER_H * 0.16 * scale, 72 * scale, 48 * scale);
+    p.noFill();
+    p.stroke(...accent, 80);
+    p.strokeWeight(1.4);
+    p.ellipse(POSTER_W * 0.16 * scale, POSTER_H * 0.16 * scale, 76 * scale, 52 * scale);
+    p.stroke(...primary, 220);
+    p.strokeWeight(3.4);
+    p.circle(0, 0, POSTER_W * 0.64 * scale);
+    p.strokeWeight(5);
+    p.line(0, 0, 0, -POSTER_H * 0.18 * scale);
+    p.strokeWeight(3.6);
+    p.line(0, 0, POSTER_W * 0.16 * scale, 30 * scale);
+    p.fill(...accent, 240);
+    p.noStroke();
+    p.circle(0, 0, 14);
+    p.push();
+    p.translate(-POSTER_W * 0.28 * scale, POSTER_H * 0.24 * scale);
+    p.rotate(-0.38);
+    p.fill(...accent, 210);
+    p.rect(0, 0, 58 * scale, 22 * scale, 2);
+    p.fill(...bg, 255);
+    p.circle(-20 * scale, 0, 6);
+    p.circle(20 * scale, 0, 6);
+    p.pop();
+    p.push();
+    p.translate(POSTER_W * 0.26 * scale, POSTER_H * 0.22 * scale);
+    p.rotate(0.42);
+    p.fill(...primary, 200);
+    p.rect(0, 0, 58 * scale, 22 * scale, 2);
+    p.fill(...bg, 255);
+    p.circle(-20 * scale, 0, 6);
+    p.circle(20 * scale, 0, 6);
+    p.pop();
+  } else if (metaphor === "handwritten-letter" || metaphor === "postcard") {
+    p.rectMode(p.CENTER);
+    for (let i = 0; i < 3; i += 1) {
+      p.push();
+      p.rotate((i - 1) * 0.12);
+      p.noStroke();
+      p.fill(0, 0, 0, 24);
+      p.rect(8, 10, POSTER_W * 0.38 * scale, POSTER_H * 0.22 * scale);
+      p.fill(245, 236, 220, 230 - i * 12);
+      p.rect(0, 0, POSTER_W * 0.38 * scale, POSTER_H * 0.22 * scale);
+      p.stroke(...primary, 100);
+      p.strokeWeight(1);
+      p.line(-POSTER_W * 0.14 * scale, -18, POSTER_W * 0.14 * scale, -12);
+      p.line(-POSTER_W * 0.13 * scale, -2, POSTER_W * 0.12 * scale, 4);
+      p.line(-POSTER_W * 0.12 * scale, 14, POSTER_W * 0.08 * scale, 18);
+      p.pop();
+    }
+    if (metaphor === "postcard") {
+      p.stroke(...accent, 150);
+      p.line(0, -POSTER_H * 0.14 * scale, 0, POSTER_H * 0.14 * scale);
+    }
+  } else if (metaphor === "railway-route") {
+    p.noFill();
+    p.stroke(...accent, 120);
+    p.strokeWeight(2);
+    for (let i = 0; i < 8; i += 1) {
+      p.beginShape();
+      for (let x = -POSTER_W * 0.48; x < POSTER_W * 0.48; x += 10) {
+        p.vertex(x * scale, (Math.sin(x * 0.012 + i * 0.4) * 28 + i * 14 - 50) * scale);
+      }
+      p.endShape();
+    }
+    p.noStroke();
+    for (let i = 0; i < 10; i += 1) {
+      p.fill(...hexToRgb(pal.highlight || pal.accent), 180);
+      p.circle((-POSTER_W * 0.3 + i * 38) * scale, (Math.sin(i * 0.9) * 40) * scale, 6 * scale);
+    }
+  } else if (metaphor === "paired-objects") {
+    p.rectMode(p.CENTER);
+    p.noStroke();
+    p.fill(...secondary, 200);
+    p.ellipse(-POSTER_W * 0.1 * scale, 8, POSTER_W * 0.16 * scale, POSTER_H * 0.08 * scale);
+    p.ellipse(POSTER_W * 0.12 * scale, 4, POSTER_W * 0.16 * scale, POSTER_H * 0.08 * scale);
+    p.fill(...primary, 120);
+    p.rect(-POSTER_W * 0.1 * scale, -20, 8, 36, 3);
+    p.rect(POSTER_W * 0.12 * scale, -24, 8, 36, 3);
+  } else if (metaphor === "weathered-door") {
+    p.rectMode(p.CENTER);
+    p.noStroke();
+    p.fill(...primary, 190);
+    p.rect(0, 0, POSTER_W * 0.34 * scale, POSTER_H * 0.58 * scale, 4);
+    p.fill(...bg, 160);
+    p.rect(0, -POSTER_H * 0.04 * scale, POSTER_W * 0.22 * scale, POSTER_H * 0.38 * scale);
+    p.fill(...accent, 200);
+    p.circle(POSTER_W * 0.1 * scale, 0, 14 * scale);
   } else if (metaphor === "locked-mechanism" || metaphor === "clock-mechanism" || metaphor === "keyhole") {
     p.noStroke();
     p.fill(...primary, metalish ? 200 : 150);
@@ -1136,6 +1220,7 @@ function drawCinematicPlate(p, dna, seed, spec) {
   const fy = Number(dnaComp(dna).focalY ?? 0.42);
   const material = semantic.material || "paper";
   const spatial = semantic.spatial || "isolated";
+  const family = grammarFamily(dna);
 
   p.background(...bg);
   p.noiseSeed(seed);
@@ -1185,22 +1270,31 @@ function drawCinematicPlate(p, dna, seed, spec) {
   drawDirectionalLight(p, dna, seed, fx, fy);
   drawNarrativeAnchor(p, dna, seed, fx, fy);
 
-  // Foreground environmental suggestion — restrained, material-led.
-  p.stroke(...secondary, material === "concrete" || material === "stone" ? 55 : 28);
-  p.strokeWeight(1.1);
-  const groundLines = spatial === "expansive" ? 4 : spatial === "claustrophobic" ? 10 : 6;
-  for (let i = 0; i < groundLines; i += 1) {
-    const x = nx(0.06 + i * (0.88 / Math.max(1, groundLines - 1)));
-    p.line(x, ny(horizon), x + (p.noise(i * 0.4) - 0.5) * 36, ny(0.94));
-  }
-
   drawMaterialGrain(p, dna, seed, materialEmphasis(dna, seed));
   drawHumanTraces(p, dna, seed, fx, fy);
 
-  p.noFill();
-  p.stroke(...hexToRgb(pal.accent), 14);
-  p.strokeWeight(1);
-  p.line(0, ny(horizon), POSTER_W, ny(horizon));
+  if (["adventure", "thriller", "scifi", "horror", "mystery", "historical"].includes(family)) {
+    p.stroke(...secondary, material === "concrete" || material === "stone" ? 55 : 28);
+    p.strokeWeight(1.1);
+    const groundLines = spatial === "expansive" ? 4 : spatial === "claustrophobic" ? 10 : 6;
+    for (let i = 0; i < groundLines; i += 1) {
+      const x = nx(0.06 + i * (0.88 / Math.max(1, groundLines - 1)));
+      p.line(x, ny(horizon), x + (p.noise(i * 0.4) - 0.5) * 36, ny(0.94));
+    }
+    p.noFill();
+    p.stroke(...hexToRgb(pal.accent), 14);
+    p.strokeWeight(1);
+    p.line(0, ny(horizon), POSTER_W, ny(horizon));
+  } else if (family === "romance") {
+    p.noFill();
+    p.stroke(...secondary, 40);
+    p.strokeWeight(1.4);
+    p.beginShape();
+    for (let x = 0; x <= POSTER_W; x += 8) {
+      p.vertex(x, ny(horizon) + Math.sin(x * 0.018) * 10);
+    }
+    p.endShape();
+  }
 
   const shadow = Number(dnaLight(dna).shadowDensity ?? 0.55);
   p.drawingContext.save();

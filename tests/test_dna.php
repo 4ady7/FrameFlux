@@ -429,6 +429,11 @@ expect(!in_array($rent['procedural']['primaryPattern'], ['grid', 'mesh'], true),
 expect(!in_array($rent['semantic']['lineSemantics'], ['circuitry', 'wiring'], true), 'comedy lines are not circuits');
 expect(in_array($rent['cinematic']['lighting'], ['high-key', 'theatrical', 'practical'], true), 'comedy lighting is high-key/theatrical');
 expect($rent['composition']['layout'] !== 'frame-inset', 'comedy avoids the sterile inset void');
+expect($rent['composition']['layout'] !== 'split-editorial', 'comedy does not squeeze titles into a split column');
+expect(
+    layoutForComposition('diagonal', 3, 'comedy') !== 'split-editorial',
+    'comedy diagonal grammar stays full-width'
+);
 
 $cape = normalizeParams(
     fallbackVisualParams(

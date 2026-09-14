@@ -855,19 +855,22 @@ function layoutForSemantic(array $semantic, int $seed): string
     $family = (string) ($semantic['grammarFamily'] ?? 'drama');
     $composition = (string) ($semantic['compositionGrammar'] ?? '');
     if ($composition !== '') {
-        $layout = layoutForComposition($composition, $seed);
+        $layout = layoutForComposition($composition, $seed, $family);
     } else {
         $layout = match ($semantic['spatial'] ?? '') {
             'isolated', 'expansive' => 'centered',
             'rising', 'expanding' => 'off-center-bottom',
-            'compressed', 'claustrophobic' => isTechFamily($family) ? 'frame-inset' : 'split-editorial',
-            'fragmented' => 'split-editorial',
+            'compressed', 'claustrophobic' => isTechFamily($family) ? 'frame-inset' : ($family === 'comedy' ? 'off-center-bottom' : 'split-editorial'),
+            'fragmented' => $family === 'comedy' ? 'off-center-top' : 'split-editorial',
             'drifting' => 'off-center-top',
             default => FRAMEFLUX_LAYOUTS[intdiv($seed, 3) % count(FRAMEFLUX_LAYOUTS)],
         };
     }
     if ($layout === 'frame-inset' && !isTechFamily($family)) {
-        $layout = 'split-editorial';
+        $layout = $family === 'comedy' ? 'off-center-bottom' : 'split-editorial';
+    }
+    if ($family === 'comedy' && $layout === 'split-editorial') {
+        $layout = $seed % 2 === 0 ? 'off-center-top' : 'off-center-bottom';
     }
     return $layout;
 }
@@ -1412,8 +1415,12 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         }
     }
     if ($layout === 'frame-inset' && !isTechFamily($family)) {
-        $layout = layoutForComposition($compositionGrammar, abs(crc32($title)));
+        $layout = layoutForComposition($compositionGrammar, abs(crc32($title)), $family);
         $warnings[] = 'frame-inset reserved for tech families';
+    }
+    if ($family === 'comedy' && $layout === 'split-editorial') {
+        $layout = layoutForComposition('asymmetric', abs(crc32($title)), $family);
+        $warnings[] = 'comedy avoids split-editorial title column';
     }
 
     $focalX = clamp((float) ($compositionIn['focalX'] ?? $anchorsIn['focalX'] ?? $params['focalX'] ?? 0.5), 0.15, 0.85);

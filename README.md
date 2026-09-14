@@ -53,7 +53,7 @@ Centered, off-center top, off-center bottom, split editorial, and frame inset. F
 
 Title and quote are separate art-directed decisions in the Visual DNA, derived from the story rather than the genre.
 
-- **Title** (`typography.title`): weight, case, letterforms, tracking, structural treatment (solid, outline, fragmented, layered, textured, gradient) and placement. Scale comes from title length and the safe width; long titles wrap, and a single unbreakable word hard-breaks rather than overflowing.
+- **Title** (`typography.title`): weight, case, letterforms, tracking, structural treatment (solid, outline, fragmented, layered, textured, gradient) and placement. Scale comes from title length and the safe width; long titles wrap, hyphenated words break at the hyphen, and a single unbreakable word hard-breaks rather than overflowing. Comedy layouts stay full-width so long titles are not squeezed into a split column.
 - **Quote** (`typography.quote`): style (editorial italic, caption, cinematic subtitle, typewriter, handwritten), its own legibility technique (scrim, shadow, plate) and placement. The quote face is always forced to contrast with the title face instead of repeating it smaller.
 
 Risky treatments are validated against the artwork underneath and degrade to a safer one when local contrast is insufficient. Readability wins over style.
