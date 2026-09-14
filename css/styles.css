@@ -183,7 +183,7 @@ textarea:focus-visible,
 
 .meta {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr));
   gap: 0.8rem;
   margin: 1rem 0 0;
   padding-top: 1rem;
