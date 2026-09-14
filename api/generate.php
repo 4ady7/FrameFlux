@@ -90,6 +90,7 @@ if ($params === null) {
 $dna = normalizeParams($params, $title, $genre, $pitch);
 $dna['source'] = $source;
 $dna['mode'] = $mode;
+$dna['qualityNotes'] = assessDnaQuality($dna);
 
 echo json_encode($dna);
 
@@ -114,7 +115,8 @@ You are refining an existing FrameFlux Visual DNA. Return JSON only with this ex
 
 {$rules}
 
-Keep the same film identity. Strengthen palette contrast, cinematic staging, layout, and quote.
+Keep the same film identity, visualMetaphor, narrativeAnchor, and material.
+Strengthen spatial emphasis, lighting, cinematic staging, and quote — not a new concept.
 Do not return an identical copy. Variation seed: {$variation}.
 
 Film title: {$title}
@@ -134,8 +136,9 @@ You reinterpret the same film as a new cinematic direction. Return JSON only wit
 
 {$rules}
 
-Same title, genre, and pitch. New mood, lighting, camera, palette, layout, and patterns.
-It must feel like a different creative take, not a seed change. Variation seed: {$variation}.
+Same title, genre, and pitch. Choose a new visualMetaphor / narrativeAnchor and material while staying true to the story.
+New mood, lighting, camera, palette, layout, and patterns.
+It must feel like a different creative campaign take, not a seed change. Variation seed: {$variation}.
 
 Film title: {$title}
 Genre: {$genre}
@@ -153,7 +156,7 @@ You are the FrameFlux art director. Convert a film concept into Visual DNA. Retu
 
 {$rules}
 
-This is a new design pass (variation {$variation}). Invent a distinct cinematic world, palette, pattern pair, layout, and quote.
+This is a new design pass (variation {$variation}). Derive emotionalCore, narrativeCore, visualMetaphor, material, and lighting from the story first, then invent palette, pattern pair, layout, and quote that serve that metaphor.
 
 Film title: {$title}
 Genre: {$genre}

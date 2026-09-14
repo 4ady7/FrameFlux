@@ -95,6 +95,7 @@ function cinematicImagePrompt(array $dna): string
     $c = is_array($dna['cinematic'] ?? null) ? $dna['cinematic'] : [];
     $p = is_array($dna['palette'] ?? null) ? $dna['palette'] : [];
     $concept = is_array($dna['concept'] ?? null) ? $dna['concept'] : [];
+    $semantic = is_array($dna['semantic'] ?? null) ? $dna['semantic'] : [];
 
     $subject = (string) ($c['subject'] ?? 'a cinematic figure');
     $environment = (string) ($c['environment'] ?? 'atmospheric landscape');
@@ -107,13 +108,23 @@ function cinematicImagePrompt(array $dna): string
     $primary = (string) ($p['primary'] ?? '#444444');
     $accent = (string) ($p['accent'] ?? '#c9a227');
 
+    $metaphor = str_replace('-', ' ', (string) ($semantic['visualMetaphor'] ?? 'silhouette threshold'));
+    $material = str_replace('-', ' ', (string) ($semantic['material'] ?? 'paper'));
+    $texture = (string) ($semantic['texture'] ?? 'grainy');
+    $emotion = (string) ($semantic['emotionalCore'] ?? 'unease');
+    $narrative = str_replace('-', ' ', (string) ($semantic['narrativeCore'] ?? 'discovery'));
+    $spatial = (string) ($semantic['spatial'] ?? 'isolated');
+
     return <<<PROMPT
 Cinematic still photograph for a movie, not a poster.
 No typography, no titles, no captions, no logos, no credits, no UI.
 {$camera} shot of {$subject} in {$environment}.
+Visual metaphor: {$metaphor}. Material presence of {$material} with {$texture} surface.
+Emotional core: {$emotion}. Narrative about {$narrative}. Spatial feel: {$spatial}.
 Mood: {$mood}. Genre feeling: {$genre}.
 Lighting: {$lighting}. Atmosphere: {$atmosphere}.
 Colour grade keyed to {$bg}, {$primary}, and a spare accent of {$accent}.
-Photoreal, anamorphic, filmic grain, production still, single frame.
+One dominant subject, restrained detail, physically believable materials, filmic grain.
+Avoid generic neon glow, random particles, and decorative symmetry.
 PROMPT;
 }

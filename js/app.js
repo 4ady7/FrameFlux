@@ -60,6 +60,11 @@ function filmPayload() {
 function showMeta(dna) {
   meta.hidden = false;
   const proc = dna.procedural || {};
+  const semantic = dna.semantic || {};
+  document.querySelector("#meta-metaphor").textContent =
+    semantic.visualMetaphor || dna.visualMetaphor || "—";
+  document.querySelector("#meta-material").textContent =
+    `${semantic.material || dna.material || "—"} · ${semantic.texture || dna.texture || ""}`.replace(/\s·\s$/, "");
   document.querySelector("#meta-pattern").textContent =
     `${proc.primaryPattern || dna.pattern} / ${proc.secondaryPattern || "–"}`;
   document.querySelector("#meta-layout").textContent = (dna.composition && dna.composition.layout) || dna.layout;
