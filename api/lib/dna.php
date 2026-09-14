@@ -734,7 +734,7 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
     $intensity = round(clamp((float) ($cinematicIn['intensity'] ?? $proceduralIn['intensity'] ?? 0.55), 0.2, 1.0), 2);
     $tension = round(clamp((float) ($cinematicIn['tension'] ?? 0.5), 0.0, 1.0), 2);
     $materialEmphasis = round(clamp((float) ($params['materialEmphasis'] ?? $proceduralIn['materialEmphasis'] ?? 0.7), 0.3, 1.0), 2);
-    $anchorScale = round(clamp((float) ($params['anchorScale'] ?? $compositionIn['anchorScale'] ?? 0.72), 0.4, 1.1), 2);
+    $anchorScale = round(clamp((float) ($params['anchorScale'] ?? $compositionIn['anchorScale'] ?? 0.92), 0.7, 1.2), 2);
     $lightDirection = round(clamp((float) ($lightingIn['direction'] ?? $params['lightDirection'] ?? 0.35), 0.0, 1.0), 2);
     $shadowDensity = round(clamp((float) ($lightingIn['shadowDensity'] ?? $params['shadowDensity'] ?? 0.55), 0.2, 0.95), 2);
 

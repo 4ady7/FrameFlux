@@ -213,8 +213,8 @@ function materialEmphasis(dna, seed) {
 }
 
 function anchorScale(dna, seed) {
-  const base = Number(dnaComp(dna).anchorScale ?? 0.72);
-  return Math.max(0.45, Math.min(1.05, base + ((seed % 13) / 13 - 0.5) * 0.1));
+  const base = Number(dnaComp(dna).anchorScale ?? 0.92);
+  return Math.max(0.7, Math.min(1.2, base + ((seed % 13) / 13 - 0.5) * 0.08));
 }
 
 function protectionWeight(u, v, dna, spec) {
@@ -379,88 +379,125 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
   const papery = material === "paper" || material === "ink" || material === "film-stock";
 
   if (metaphor === "fractured-glass" || metaphor === "distorted-reflection") {
-    p.noFill();
-    p.stroke(...accent, 140 * emphasis);
-    p.strokeWeight(1.4);
-    const shards = 7;
+    // Dominant cracked pane — one clear glass object, not decorative sparkle.
+    p.noStroke();
+    p.fill(...secondary, glassy ? 70 : 100);
+    p.rectMode(p.CENTER);
+    p.rect(0, 0, POSTER_W * 0.46 * scale, POSTER_H * 0.34 * scale, 2);
+    p.fill(...primary, 40);
+    p.rect(-POSTER_W * 0.02 * scale, -POSTER_H * 0.01 * scale, POSTER_W * 0.42 * scale, POSTER_H * 0.3 * scale, 2);
+    p.stroke(...accent, 170 * emphasis);
+    p.strokeWeight(1.6);
+    const shards = 9;
     for (let i = 0; i < shards; i += 1) {
-      const a0 = (i / shards) * p.TWO_PI + p.random(-0.1, 0.1);
-      const a1 = a0 + p.TWO_PI / shards * (0.55 + p.random() * 0.3);
-      const r0 = POSTER_W * (0.08 + p.random() * 0.08) * scale;
-      const r1 = POSTER_W * (0.18 + p.random() * 0.14) * scale;
-      p.fill(...primary, glassy ? 55 : 95);
+      const a0 = (i / shards) * p.TWO_PI + p.random(-0.08, 0.08);
+      const a1 = a0 + p.TWO_PI / shards * (0.45 + p.random() * 0.35);
+      const r0 = POSTER_W * (0.06 + p.random() * 0.08) * scale;
+      const r1 = POSTER_W * (0.16 + p.random() * 0.14) * scale;
+      p.fill(...primary, glassy ? 45 : 75);
       p.beginShape();
       p.vertex(0, 0);
-      p.vertex(Math.cos(a0) * r0, Math.sin(a0) * r1 * 0.7);
+      p.vertex(Math.cos(a0) * r0, Math.sin(a0) * r1 * 0.75);
       p.vertex(Math.cos(a1) * r1, Math.sin(a1) * r0);
       p.endShape(p.CLOSE);
-      p.stroke(...secondary, 90);
-      p.line(Math.cos(a0) * r0 * 0.2, Math.sin(a0) * r0 * 0.2, Math.cos(a0) * r1, Math.sin(a0) * r1);
+      p.stroke(...accent, 120);
+      p.line(0, 0, Math.cos(a0) * r1 * 1.15, Math.sin(a0) * r1 * 1.15);
+    }
+    if (metaphor === "distorted-reflection") {
+      p.noFill();
+      p.stroke(...accent, 90);
+      p.ellipse(0, 0, POSTER_W * 0.22 * scale, POSTER_H * 0.28 * scale);
     }
   } else if (metaphor === "eclipse" || metaphor === "orbital-system" || metaphor === "biological-cell" || metaphor === "signal") {
     const rings = metaphor === "orbital-system" ? 5 : metaphor === "biological-cell" ? 4 : 3;
     p.noFill();
     for (let i = 1; i <= rings; i += 1) {
       const t = i / rings;
-      p.stroke(...(i === rings ? accent : secondary), (120 - i * 18) * emphasis);
-      p.strokeWeight(metaphor === "signal" ? 1.1 : 1.6);
-      p.ellipse(0, 0, POSTER_W * (0.12 + t * 0.42) * scale, POSTER_H * (0.08 + t * 0.28) * scale);
+      p.stroke(...(i === rings ? accent : secondary), (150 - i * 18) * emphasis);
+      p.strokeWeight(metaphor === "signal" ? 1.3 : 2);
+      p.ellipse(0, 0, POSTER_W * (0.16 + t * 0.5) * scale, POSTER_H * (0.1 + t * 0.34) * scale);
     }
     p.noStroke();
-    p.fill(...(metaphor === "eclipse" ? bg : primary), metaphor === "eclipse" ? 220 : 160);
-    p.circle(0, 0, POSTER_W * 0.16 * scale);
+    p.fill(...(metaphor === "eclipse" ? bg : primary), metaphor === "eclipse" ? 230 : 180);
+    p.circle(0, 0, POSTER_W * 0.22 * scale);
     if (metaphor === "eclipse") {
-      p.fill(...accent, 40);
-      p.circle(-POSTER_W * 0.03 * scale, -POSTER_H * 0.01 * scale, POSTER_W * 0.17 * scale);
+      p.fill(...accent, 50);
+      p.circle(-POSTER_W * 0.04 * scale, -POSTER_H * 0.015 * scale, POSTER_W * 0.23 * scale);
+      p.noFill();
+      p.stroke(...accent, 120);
+      p.strokeWeight(2);
+      p.circle(0, 0, POSTER_W * 0.34 * scale);
     }
     if (metaphor === "orbital-system" || metaphor === "signal") {
-      p.stroke(...accent, 130);
-      p.strokeWeight(1.2);
+      p.stroke(...accent, 170);
+      p.strokeWeight(1.6);
       p.noFill();
-      p.circle(POSTER_W * 0.18 * scale, -POSTER_H * 0.05 * scale, 10);
-      p.line(0, 0, POSTER_W * 0.18 * scale, -POSTER_H * 0.05 * scale);
+      const ox = POSTER_W * 0.22 * scale;
+      const oy = -POSTER_H * 0.07 * scale;
+      p.circle(ox, oy, 16);
+      p.line(0, 0, ox, oy);
+      p.fill(...accent, 160);
+      p.noStroke();
+      p.circle(ox, oy, 6);
     }
   } else if (metaphor === "locked-mechanism" || metaphor === "clock-mechanism" || metaphor === "keyhole") {
     p.noStroke();
-    p.fill(...primary, metalish ? 180 : 140);
-    p.circle(0, 0, POSTER_W * 0.34 * scale);
-    p.fill(...bg, 200);
-    p.circle(0, 0, POSTER_W * 0.18 * scale);
-    p.fill(...accent, 160);
+    p.fill(...primary, metalish ? 200 : 150);
+    p.circle(0, 0, POSTER_W * 0.46 * scale);
+    p.fill(...secondary, 90);
+    p.circle(0, 0, POSTER_W * 0.38 * scale);
+    p.fill(...bg, 220);
+    p.circle(0, 0, POSTER_W * 0.24 * scale);
     if (metaphor === "keyhole") {
-      p.circle(0, -8 * scale, POSTER_W * 0.07 * scale);
+      // Unmistakable keyhole void.
+      p.fill(...bg, 255);
+      p.circle(0, -POSTER_H * 0.02 * scale, POSTER_W * 0.12 * scale);
       p.rectMode(p.CENTER);
-      p.rect(0, 18 * scale, POSTER_W * 0.045 * scale, POSTER_H * 0.08 * scale, 3);
-    } else {
-      p.stroke(...accent, 180);
+      p.rect(0, POSTER_H * 0.05 * scale, POSTER_W * 0.07 * scale, POSTER_H * 0.12 * scale, 4);
+      p.noFill();
+      p.stroke(...accent, 160);
       p.strokeWeight(2);
+      p.circle(0, 0, POSTER_W * 0.46 * scale);
+    } else {
+      p.stroke(...accent, 200);
+      p.strokeWeight(2.4);
       p.noFill();
       const teeth = metaphor === "clock-mechanism" ? 12 : 8;
       for (let i = 0; i < teeth; i += 1) {
         const a = (i / teeth) * p.TWO_PI;
-        p.line(Math.cos(a) * POSTER_W * 0.1 * scale, Math.sin(a) * POSTER_W * 0.1 * scale, Math.cos(a) * POSTER_W * 0.16 * scale, Math.sin(a) * POSTER_W * 0.16 * scale);
+        p.line(
+          Math.cos(a) * POSTER_W * 0.14 * scale,
+          Math.sin(a) * POSTER_W * 0.14 * scale,
+          Math.cos(a) * POSTER_W * 0.21 * scale,
+          Math.sin(a) * POSTER_W * 0.21 * scale
+        );
       }
-      p.strokeWeight(2.2);
-      p.line(0, 0, Math.cos(-0.7) * POSTER_W * 0.11 * scale, Math.sin(-0.7) * POSTER_W * 0.11 * scale);
-      p.line(0, 0, Math.cos(1.1) * POSTER_W * 0.07 * scale, Math.sin(1.1) * POSTER_W * 0.07 * scale);
+      p.strokeWeight(2.6);
+      p.line(0, 0, Math.cos(-0.7) * POSTER_W * 0.14 * scale, Math.sin(-0.7) * POSTER_W * 0.14 * scale);
+      p.line(0, 0, Math.cos(1.1) * POSTER_W * 0.09 * scale, Math.sin(1.1) * POSTER_W * 0.09 * scale);
+      p.fill(...accent, 180);
+      p.noStroke();
+      p.circle(0, 0, 10);
     }
   } else if (metaphor === "decaying-photograph" || metaphor === "burning-document" || metaphor === "map-fold") {
-    const w = POSTER_W * 0.42 * scale;
-    const h = POSTER_H * 0.28 * scale;
+    const w = POSTER_W * 0.52 * scale;
+    const h = POSTER_H * 0.36 * scale;
     p.rectMode(p.CENTER);
     p.noStroke();
-    p.fill(0, 0, 0, 50);
-    p.rect(8, 10, w, h);
-    p.fill(...(papery ? secondary : primary), 170);
+    p.fill(0, 0, 0, 70);
+    p.rect(10, 14, w, h);
+    p.fill(...(papery ? secondary : primary), 190);
     p.rect(0, 0, w, h);
-    p.stroke(...accent, 70);
-    p.strokeWeight(1);
+    p.stroke(...accent, 90);
+    p.strokeWeight(1.2);
+    p.noFill();
+    p.rect(0, 0, w * 0.92, h * 0.9);
     if (metaphor === "map-fold") {
       p.line(-w * 0.5, 0, w * 0.5, 0);
       p.line(0, -h * 0.5, 0, h * 0.5);
       for (let i = 0; i < 5; i += 1) {
         p.noFill();
-        p.stroke(...primary, 90);
+        p.stroke(...primary, 110);
         p.beginShape();
         for (let x = -w * 0.4; x <= w * 0.4; x += 8) {
           p.vertex(x, Math.sin(x * 0.08 + i) * 10 + i * 8 - 16);
@@ -469,60 +506,73 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
       }
     } else if (metaphor === "burning-document") {
       p.noStroke();
-      for (let i = 0; i < 18; i += 1) {
+      for (let i = 0; i < 22; i += 1) {
         const bx = p.random(-w * 0.45, w * 0.45);
-        const by = h * 0.5 - p.random(0, h * 0.55);
-        p.fill(...accent, 40 + p.random(80));
-        p.ellipse(bx, by, p.random(6, 18), p.random(10, 28));
+        const by = h * 0.5 - p.random(0, h * 0.6);
+        p.fill(...accent, 50 + p.random(90));
+        p.ellipse(bx, by, p.random(8, 22), p.random(12, 34));
       }
     } else {
+      // Faded portrait plane inside the photograph.
       p.noStroke();
-      p.fill(...bg, 90);
-      p.rect(-w * 0.12, -h * 0.08, w * 0.55, h * 0.45);
-      p.fill(...accent, 35);
-      p.ellipse(w * 0.18, h * 0.1, w * 0.35, h * 0.4);
+      p.fill(...bg, 110);
+      p.rect(0, -h * 0.04, w * 0.62, h * 0.55);
+      p.fill(...primary, 80);
+      p.ellipse(0, -h * 0.08, w * 0.28, h * 0.28);
+      p.fill(...accent, 45);
+      p.ellipse(w * 0.16, h * 0.14, w * 0.34, h * 0.28);
+      // Emulsion damage.
+      for (let i = 0; i < 14; i += 1) {
+        p.fill(...bg, 40 + p.random(50));
+        p.ellipse(p.random(-w * 0.4, w * 0.4), p.random(-h * 0.4, h * 0.4), p.random(4, 18), p.random(3, 12));
+      }
     }
   } else if (metaphor === "tangled-roots" || metaphor === "maze" || metaphor === "architectural-ruin") {
     p.noFill();
-    p.stroke(...primary, 150 * emphasis);
-    p.strokeWeight(1.4);
-    const branches = metaphor === "maze" ? 10 : 14;
+    p.stroke(...primary, 180 * emphasis);
+    p.strokeWeight(metaphor === "tangled-roots" ? 2.2 : 1.6);
+    const branches = metaphor === "maze" ? 12 : 18;
     for (let i = 0; i < branches; i += 1) {
       let x = 0;
-      let y = metaphor === "architectural-ruin" ? POSTER_H * 0.12 * scale : 0;
+      let y = metaphor === "architectural-ruin" ? POSTER_H * 0.14 * scale : POSTER_H * 0.08 * scale;
       p.beginShape();
-      for (let s = 0; s < 22; s += 1) {
+      for (let s = 0; s < 28; s += 1) {
         p.vertex(x, y);
-        const n = p.noise(i * 0.4, s * 0.15);
+        const n = p.noise(i * 0.35, s * 0.12);
         if (metaphor === "maze") {
-          x += (n > 0.5 ? 1 : -1) * 8 * scale;
-          y += 7 * scale;
+          x += (n > 0.5 ? 1 : -1) * 10 * scale;
+          y += 8 * scale;
         } else if (metaphor === "architectural-ruin") {
-          x += (p.random() - 0.5) * 10;
-          y -= 8 * scale;
+          x += (p.random() - 0.5) * 12;
+          y -= 9 * scale;
         } else {
-          x += Math.cos(n * p.TWO_PI) * 7 * scale;
-          y += Math.sin(n * p.TWO_PI + i) * 6 * scale + 2;
+          x += Math.cos(n * p.TWO_PI + i * 0.2) * 9 * scale;
+          y -= Math.abs(Math.sin(n * p.TWO_PI + i)) * 8 * scale + 1;
         }
       }
       p.endShape();
     }
     if (metaphor === "architectural-ruin") {
-      p.stroke(...accent, 100);
+      p.stroke(...accent, 120);
+      p.strokeWeight(1.8);
       p.rectMode(p.CENTER);
-      p.rect(0, POSTER_H * 0.02 * scale, POSTER_W * 0.28 * scale, POSTER_H * 0.18 * scale);
+      p.rect(0, POSTER_H * 0.02 * scale, POSTER_W * 0.34 * scale, POSTER_H * 0.22 * scale);
+    } else if (metaphor === "tangled-roots") {
+      p.noStroke();
+      p.fill(...accent, 70);
+      p.ellipse(0, POSTER_H * 0.1 * scale, POSTER_W * 0.2 * scale, POSTER_H * 0.06 * scale);
     }
   } else {
     // silhouette-threshold default — figure at a doorway / threshold
     p.noStroke();
-    p.fill(...primary, 150);
+    p.fill(...primary, 170);
     p.rectMode(p.CENTER);
-    p.rect(0, POSTER_H * 0.02 * scale, POSTER_W * 0.22 * scale, POSTER_H * 0.42 * scale, 2);
-    p.fill(...bg, 180);
-    p.rect(0, POSTER_H * 0.02 * scale, POSTER_W * 0.12 * scale, POSTER_H * 0.34 * scale);
-    p.fill(...secondary, 160);
-    p.ellipse(0, -POSTER_H * 0.08 * scale, POSTER_W * 0.09 * scale, POSTER_H * 0.12 * scale);
-    p.rect(0, POSTER_H * 0.06 * scale, POSTER_W * 0.07 * scale, POSTER_H * 0.22 * scale, 8);
+    p.rect(0, POSTER_H * 0.02 * scale, POSTER_W * 0.28 * scale, POSTER_H * 0.5 * scale, 2);
+    p.fill(...bg, 200);
+    p.rect(0, POSTER_H * 0.02 * scale, POSTER_W * 0.16 * scale, POSTER_H * 0.4 * scale);
+    p.fill(...secondary, 180);
+    p.ellipse(0, -POSTER_H * 0.1 * scale, POSTER_W * 0.11 * scale, POSTER_H * 0.14 * scale);
+    p.rect(0, POSTER_H * 0.07 * scale, POSTER_W * 0.09 * scale, POSTER_H * 0.26 * scale, 8);
   }
 
   // Specular / material highlight from light origin.
@@ -943,7 +993,8 @@ function patternPlan(dna, role) {
       { name: primary, weight: 0.18, seedShift: 140 },
     ];
   }
-  return [{ name: primary, weight: 0.92, seedShift: 0 }];
+  // Signature: one strong primary system — keep secondary off so the anchor can own the frame.
+  return [{ name: primary, weight: 0.72, seedShift: 0 }];
 }
 
 function drawTypography(p, dna, spec) {
@@ -984,7 +1035,7 @@ function drawTypography(p, dna, spec) {
   const quoteSize = 15;
   p.textFont("Cormorant Garamond");
   p.textSize(quoteSize);
-  const quoteLines = wrapLines(p, dna.concept?.quote || dna.quote || "", quoteWidth, 2);
+  const quoteLines = wrapLines(p, dna.concept?.quote || dna.quote || "", quoteWidth, 3);
 
   const genreGap = 16;
   const quoteGap = 20;
