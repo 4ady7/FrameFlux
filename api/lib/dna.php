@@ -291,6 +291,19 @@ function whitelistPrevious(?array $previous): ?array
     ];
 }
 
+/**
+ * Words a tagline must never end on, so a trimmed pitch cannot read "under an."
+ */
+const FRAMEFLUX_DANGLING_WORDS = [
+    'a', 'an', 'the', 'and', 'or', 'but', 'of', 'in', 'on', 'at', 'to', 'for',
+    'from', 'with', 'by', 'as', 'into', 'onto', 'over', 'under', 'that', 'which',
+    'who', 'whose', 'is', 'are', 'was', 'were', 'be', 'been', 'his', 'her',
+    'their', 'its', 'this', 'these', 'those', 'when', 'while', 'after', 'before',
+];
+
+/**
+ * The genre never reaches the poster, so it is deliberately not a quote source.
+ */
 function fallbackQuote(string $title, string $genre, string $pitch, int $seed): string
 {
     $shortTitle = mb_strlen($title) > 28 ? mb_substr($title, 0, 25) . '…' : $title;
@@ -301,18 +314,27 @@ function fallbackQuote(string $title, string $genre, string $pitch, int $seed): 
         'Love, dread, and unfinished business.',
         'The night keeps better secrets.',
         'Nothing stays buried for long.',
+        'Some doors only open once.',
+        'What is kept is never safe.',
     ];
 
     if ($pitch !== '') {
         $words = preg_split('/\s+/', trim($pitch)) ?: [];
-        $snippet = implode(' ', array_slice($words, 0, 8));
-        if ($snippet !== '') {
-            $options[] = rtrim($snippet, '.,;:') . '.';
+        $snippet = array_slice($words, 0, 9);
+        // Never end a tagline on a dangling article or preposition.
+        while ($snippet !== []) {
+            $last = strtolower(rtrim((string) end($snippet), '.,;:!?'));
+            if (!in_array($last, FRAMEFLUX_DANGLING_WORDS, true)) {
+                break;
+            }
+            array_pop($snippet);
+        }
+        if (count($snippet) >= 4) {
+            $options[] = rtrim(implode(' ', $snippet), '.,;:') . '.';
         }
     }
 
     $options[] = $shortTitle . ' begins after dark.';
-    $options[] = ucfirst(strtolower($genre)) . ' never asks permission.';
 
     return $options[$seed % count($options)];
 }

@@ -181,10 +181,41 @@ function measureStyled(ctx, face, size, str) {
   return w;
 }
 
+/**
+ * Split a word that can never fit on one line into chunks that can, so a long
+ * unbroken title hard-breaks instead of running past the safe width.
+ */
+function breakLongWord(ctx, face, size, word, maxWidth) {
+  const chunks = [];
+  let chunk = "";
+  for (const ch of word) {
+    const next = chunk + ch;
+    if (chunk && measureStyled(ctx, face, size, `${next}-`) > maxWidth) {
+      chunks.push(`${chunk}-`);
+      chunk = ch;
+    } else {
+      chunk = next;
+    }
+  }
+  if (chunk) {
+    chunks.push(chunk);
+  }
+  return chunks.length ? chunks : [word];
+}
+
 function wrapStyled(ctx, face, size, text, maxWidth, maxLines) {
-  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
-  if (!words.length) {
+  const raw = String(text || "").trim().split(/\s+/).filter(Boolean);
+  if (!raw.length) {
     return [];
+  }
+  // Pre-split any single word that is wider than the whole safe area.
+  const words = [];
+  for (const word of raw) {
+    if (measureStyled(ctx, face, size, word) > maxWidth) {
+      words.push(...breakLongWord(ctx, face, size, word, maxWidth));
+    } else {
+      words.push(word);
+    }
   }
   const lines = [];
   let current = "";
@@ -193,7 +224,11 @@ function wrapStyled(ctx, face, size, text, maxWidth, maxLines) {
     const isLastSlot = lines.length === maxLines - 1;
     if (measureStyled(ctx, face, size, next) > maxWidth && current) {
       if (isLastSlot) {
-        let clipped = [current].concat(words.slice(i)).join(" ");
+        // Rejoin without reintroducing spaces inside a hard-broken word.
+        let clipped = [current]
+          .concat(words.slice(i))
+          .join(" ")
+          .replace(/-\s+/g, "-");
         while (
           clipped.length > 1 &&
           measureStyled(ctx, face, size, `${clipped}…`) > maxWidth
