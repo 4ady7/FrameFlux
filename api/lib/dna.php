@@ -690,10 +690,7 @@ function inferTypographyDirection(array $semantic, string $genre, int $seed): ar
     if (in_array($emotion, ['urgency', 'paranoia', 'dread'], true)) {
         $quotePrefs[] = 'caption';
     }
-    // Secondary material cues keep the tail of the list from being uniform.
-    if (in_array($material, ['paper', 'ink'], true)) {
-        $quotePrefs[] = 'typewriter';
-    }
+    // Secondary cues, kept narrow so they do not swamp the seeded rotation.
     if ($material === 'fabric') {
         $quotePrefs[] = 'handwritten';
     }
