@@ -129,6 +129,57 @@ const FRAMEFLUX_NARRATIVES = [
     'memory',
 ];
 
+const FRAMEFLUX_TITLE_WEIGHTS = ['hairline', 'light', 'regular', 'bold', 'black'];
+const FRAMEFLUX_TITLE_CASES = ['uppercase', 'title', 'lowercase', 'mixed'];
+const FRAMEFLUX_LETTERFORMS = [
+    'classical-serif',
+    'slab-serif',
+    'geometric-sans',
+    'grotesque',
+    'condensed',
+    'extended',
+    'hand-lettered',
+    'distressed',
+    'technical-stencil',
+];
+const FRAMEFLUX_TRACKING = ['tight', 'normal', 'wide'];
+const FRAMEFLUX_TITLE_STRUCTURES = ['solid', 'outline', 'fragmented', 'layered', 'textured', 'gradient'];
+const FRAMEFLUX_TITLE_PLACEMENTS = ['upper-third', 'lower-third', 'centered', 'split'];
+
+const FRAMEFLUX_QUOTE_STYLES = [
+    'editorial-italic',
+    'caption',
+    'cinematic-subtitle',
+    'typewriter',
+    'handwritten',
+];
+const FRAMEFLUX_QUOTE_LEGIBILITY = ['scrim', 'shadow', 'plate', 'none'];
+const FRAMEFLUX_QUOTE_PLACEMENTS = ['below-title', 'bottom-anchored', 'focal-adjacent'];
+
+/**
+ * Letterform families grouped by typographic category. Used to force the quote
+ * face to contrast with the title face instead of repeating it smaller.
+ */
+const FRAMEFLUX_LETTERFORM_CATEGORY = [
+    'classical-serif' => 'serif',
+    'slab-serif' => 'serif',
+    'distressed' => 'serif',
+    'geometric-sans' => 'sans',
+    'grotesque' => 'sans',
+    'condensed' => 'sans',
+    'extended' => 'sans',
+    'technical-stencil' => 'sans',
+    'hand-lettered' => 'script',
+];
+
+const FRAMEFLUX_QUOTE_STYLE_CATEGORY = [
+    'editorial-italic' => 'serif',
+    'caption' => 'sans',
+    'cinematic-subtitle' => 'sans',
+    'typewriter' => 'mono',
+    'handwritten' => 'script',
+];
+
 const FRAMEFLUX_LAYOUT_ALIASES = [
     'hero' => 'centered',
     'centered' => 'centered',
@@ -231,6 +282,8 @@ function whitelistPrevious(?array $previous): ?array
         'primaryPattern' => $normalized['pattern'],
         'secondaryPattern' => $normalized['procedural']['secondaryPattern'],
         'titleStyle' => $normalized['titleStyle'],
+        'titleTypographyDirection' => $normalized['typography']['title'],
+        'quoteTypographyDirection' => $normalized['typography']['quote'],
         'lighting' => $normalized['cinematic']['lighting'],
         'atmosphere' => $normalized['cinematic']['atmosphere'],
         'camera' => $normalized['cinematic']['camera'],
@@ -238,6 +291,19 @@ function whitelistPrevious(?array $previous): ?array
     ];
 }
 
+/**
+ * Words a tagline must never end on, so a trimmed pitch cannot read "under an."
+ */
+const FRAMEFLUX_DANGLING_WORDS = [
+    'a', 'an', 'the', 'and', 'or', 'but', 'of', 'in', 'on', 'at', 'to', 'for',
+    'from', 'with', 'by', 'as', 'into', 'onto', 'over', 'under', 'that', 'which',
+    'who', 'whose', 'is', 'are', 'was', 'were', 'be', 'been', 'his', 'her',
+    'their', 'its', 'this', 'these', 'those', 'when', 'while', 'after', 'before',
+];
+
+/**
+ * The genre never reaches the poster, so it is deliberately not a quote source.
+ */
 function fallbackQuote(string $title, string $genre, string $pitch, int $seed): string
 {
     $shortTitle = mb_strlen($title) > 28 ? mb_substr($title, 0, 25) . '…' : $title;
@@ -248,18 +314,27 @@ function fallbackQuote(string $title, string $genre, string $pitch, int $seed): 
         'Love, dread, and unfinished business.',
         'The night keeps better secrets.',
         'Nothing stays buried for long.',
+        'Some doors only open once.',
+        'What is kept is never safe.',
     ];
 
     if ($pitch !== '') {
         $words = preg_split('/\s+/', trim($pitch)) ?: [];
-        $snippet = implode(' ', array_slice($words, 0, 8));
-        if ($snippet !== '') {
-            $options[] = rtrim($snippet, '.,;:') . '.';
+        $snippet = array_slice($words, 0, 9);
+        // Never end a tagline on a dangling article or preposition.
+        while ($snippet !== []) {
+            $last = strtolower(rtrim((string) end($snippet), '.,;:!?'));
+            if (!in_array($last, FRAMEFLUX_DANGLING_WORDS, true)) {
+                break;
+            }
+            array_pop($snippet);
+        }
+        if (count($snippet) >= 4) {
+            $options[] = rtrim(implode(' ', $snippet), '.,;:') . '.';
         }
     }
 
     $options[] = $shortTitle . ' begins after dark.';
-    $options[] = ucfirst(strtolower($genre)) . ' never asks permission.';
 
     return $options[$seed % count($options)];
 }
@@ -484,6 +559,189 @@ function layoutForSemantic(array $semantic, int $seed): string
     };
 }
 
+/**
+ * Pick the first preferred quote style that does not sit in the same
+ * typographic category as the title, so contrast is guaranteed without
+ * every clash collapsing onto a single fallback face.
+ */
+function pickContrastingQuoteStyle(string $titleCategory, array $preferences, int $seed): string
+{
+    $rotation = FRAMEFLUX_QUOTE_STYLES;
+    $offset = $seed % count($rotation);
+    $rotated = array_merge(array_slice($rotation, $offset), array_slice($rotation, 0, $offset));
+
+    foreach (array_merge($preferences, $rotated) as $style) {
+        if (!in_array($style, FRAMEFLUX_QUOTE_STYLES, true)) {
+            continue;
+        }
+        if ((FRAMEFLUX_QUOTE_STYLE_CATEGORY[$style] ?? 'serif') !== $titleCategory) {
+            return $style;
+        }
+    }
+
+    return 'caption';
+}
+
+/**
+ * Derive title and quote typography from the story, not from a genre lookup.
+ * Genre still nudges the result, but material / emotion / spatial lead.
+ */
+function inferTypographyDirection(array $semantic, string $genre, int $seed): array
+{
+    $emotion = $semantic['emotionalCore'];
+    $narrative = $semantic['narrativeCore'];
+    $material = $semantic['material'];
+    $texture = $semantic['texture'];
+    $spatial = $semantic['spatial'];
+    $g = strtolower($genre);
+
+    // Letterforms follow what the poster is made of.
+    $letterforms = match ($material) {
+        'glass', 'plastic' => 'geometric-sans',
+        'water' => 'grotesque',
+        'metal' => 'technical-stencil',
+        'rust' => 'condensed',
+        'paper', 'ink' => 'classical-serif',
+        'film-stock' => 'grotesque',
+        'concrete' => 'extended',
+        'stone' => 'extended',
+        'fabric' => 'classical-serif',
+        'wood' => 'slab-serif',
+        'smoke', 'dust' => 'distressed',
+        default => 'grotesque',
+    };
+    if ($emotion === 'intimacy' && in_array($material, ['fabric', 'paper'], true)) {
+        $letterforms = 'hand-lettered';
+    }
+    if ($narrative === 'control' && $material !== 'paper') {
+        $letterforms = 'technical-stencil';
+    }
+    // Comedy resists heavy institutional letterforms.
+    if (str_contains($g, 'comedy') && $letterforms === 'technical-stencil') {
+        $letterforms = 'extended';
+    }
+
+    // Case treatment follows emotional register.
+    $case = match ($emotion) {
+        'intimacy', 'longing', 'grief' => 'lowercase',
+        'nostalgia' => 'title',
+        'urgency', 'paranoia', 'dread', 'triumph' => 'uppercase',
+        'wonder' => 'title',
+        'isolation' => 'lowercase',
+        default => 'uppercase',
+    };
+
+    // Weight follows how loud the story is.
+    $weight = match ($emotion) {
+        'urgency', 'triumph' => 'black',
+        'dread', 'paranoia' => 'bold',
+        'intimacy', 'longing' => 'light',
+        'isolation' => 'hairline',
+        'grief' => 'light',
+        default => 'regular',
+    };
+    if ($letterforms === 'hand-lettered' && in_array($weight, ['hairline', 'black'], true)) {
+        $weight = 'regular';
+    }
+
+    // Tracking follows how much air the space has.
+    $tracking = match ($spatial) {
+        'compressed', 'claustrophobic', 'converging' => 'tight',
+        'expansive', 'expanding', 'drifting', 'rising' => 'wide',
+        default => 'normal',
+    };
+
+    // Structure follows material behaviour and spatial break-up.
+    $structure = match (true) {
+        in_array($spatial, ['fragmented', 'collapsing'], true) => 'fragmented',
+        $material === 'glass' => 'outline',
+        in_array($material, ['metal', 'rust'], true) => 'textured',
+        in_array($texture, ['corroded', 'scratched', 'weathered'], true) => 'textured',
+        in_array($material, ['smoke', 'dust'], true) => 'gradient',
+        in_array($material, ['concrete', 'stone'], true) => 'layered',
+        default => 'solid',
+    };
+
+    // Placement keeps the title out of the focal mass.
+    $placement = match ($spatial) {
+        'rising', 'expanding' => 'lower-third',
+        'drifting' => 'upper-third',
+        'isolated' => 'centered',
+        'fragmented' => 'split',
+        'claustrophobic', 'compressed' => 'lower-third',
+        default => FRAMEFLUX_TITLE_PLACEMENTS[$seed % count(FRAMEFLUX_TITLE_PLACEMENTS)],
+    };
+
+    // Quote style follows how the story is "recorded", in preference order, so a
+    // clash with the title face falls through to the next meaningful choice.
+    $quotePrefs = [];
+    if ($material === 'film-stock' || $texture === 'photographic') {
+        $quotePrefs[] = 'cinematic-subtitle';
+    }
+    if (in_array($narrative, ['investigation', 'control', 'betrayal'], true)) {
+        $quotePrefs[] = 'typewriter';
+    }
+    if ($emotion === 'intimacy' || $letterforms === 'hand-lettered') {
+        $quotePrefs[] = 'handwritten';
+    }
+    if (in_array($emotion, ['nostalgia', 'grief', 'longing'], true)) {
+        $quotePrefs[] = 'editorial-italic';
+    }
+    if (in_array($emotion, ['urgency', 'paranoia', 'dread'], true)) {
+        $quotePrefs[] = 'caption';
+    }
+    // Secondary cues, kept narrow so they do not swamp the seeded rotation.
+    if ($material === 'fabric') {
+        $quotePrefs[] = 'handwritten';
+    }
+    if (in_array($emotion, ['wonder', 'triumph'], true)) {
+        $quotePrefs[] = 'cinematic-subtitle';
+    }
+
+    $titleCategory = FRAMEFLUX_LETTERFORM_CATEGORY[$letterforms] ?? 'sans';
+    $quoteStyle = pickContrastingQuoteStyle($titleCategory, $quotePrefs, $seed);
+    $pairing = (FRAMEFLUX_QUOTE_STYLE_CATEGORY[$quoteStyle] ?? 'serif') === $titleCategory
+        ? 'complement'
+        : 'contrast';
+
+    // Legibility technique belongs to the quote style.
+    $quoteLegibility = match ($quoteStyle) {
+        'cinematic-subtitle' => 'shadow',
+        'typewriter' => 'plate',
+        'handwritten' => 'plate',
+        'caption' => 'scrim',
+        default => 'scrim',
+    };
+
+    $quotePlacement = match ($placement) {
+        'split' => 'bottom-anchored',
+        'centered' => 'below-title',
+        'lower-third' => 'below-title',
+        'upper-third' => 'bottom-anchored',
+        default => 'below-title',
+    };
+    if ($narrative === 'memory' && $quoteStyle === 'editorial-italic') {
+        $quotePlacement = 'bottom-anchored';
+    }
+
+    return [
+        'title' => [
+            'weight' => $weight,
+            'case' => $case,
+            'letterforms' => $letterforms,
+            'tracking' => $tracking,
+            'structure' => $structure,
+            'placement' => $placement,
+        ],
+        'quote' => [
+            'style' => $quoteStyle,
+            'pairing' => $pairing,
+            'legibility' => $quoteLegibility,
+            'placement' => $quotePlacement,
+        ],
+    ];
+}
+
 function fallbackVisualParams(
     string $title,
     string $genre,
@@ -582,6 +840,8 @@ function fallbackVisualParams(
         default => FRAMEFLUX_CAMERA[intdiv($seed, 5) % count(FRAMEFLUX_CAMERA)],
     };
 
+    $typeDirection = inferTypographyDirection($semantic, $genre, $seed);
+
     return [
         'palette' => [
             'background' => $bg,
@@ -595,6 +855,8 @@ function fallbackVisualParams(
         'pattern' => $pattern,
         'secondaryPattern' => $secondPat,
         'layout' => $layout,
+        'titleTypographyDirection' => $typeDirection['title'],
+        'quoteTypographyDirection' => $typeDirection['quote'],
         'mood' => $semantic['emotionalCore'] . ' · ' . $semantic['narrativeCore'],
         'quote' => fallbackQuote($title, $genre, $pitch, $seed),
         'density' => 0.4 + ($seed % 35) / 100,
@@ -741,6 +1003,62 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
     $highlight = sanitizeHex((string) ($paletteIn['highlight'] ?? $paletteIn['accent'] ?? ''), '#e8c36a');
     $neutral = sanitizeHex((string) ($paletteIn['neutral'] ?? $paletteIn['text'] ?? ''), '#f5f0e6');
 
+    $inferredType = inferTypographyDirection(
+        [
+            'emotionalCore' => $emotionalCore,
+            'narrativeCore' => $narrativeCore,
+            'material' => $material,
+            'texture' => $texture,
+            'spatial' => $spatial,
+        ],
+        $genre,
+        abs(crc32($title . '|' . $genre . '|type'))
+    );
+
+    $titleDirIn = is_array($typographyIn['title'] ?? null)
+        ? $typographyIn['title']
+        : (is_array($params['titleTypographyDirection'] ?? null) ? $params['titleTypographyDirection'] : []);
+    $quoteDirIn = is_array($typographyIn['quote'] ?? null)
+        ? $typographyIn['quote']
+        : (is_array($params['quoteTypographyDirection'] ?? null) ? $params['quoteTypographyDirection'] : []);
+
+    $titleDirection = [
+        'weight' => enumValue((string) ($titleDirIn['weight'] ?? ''), FRAMEFLUX_TITLE_WEIGHTS, $inferredType['title']['weight']),
+        'case' => enumValue((string) ($titleDirIn['case'] ?? ''), FRAMEFLUX_TITLE_CASES, $inferredType['title']['case']),
+        'letterforms' => enumValue((string) ($titleDirIn['letterforms'] ?? ''), FRAMEFLUX_LETTERFORMS, $inferredType['title']['letterforms']),
+        'tracking' => enumValue((string) ($titleDirIn['tracking'] ?? ''), FRAMEFLUX_TRACKING, $inferredType['title']['tracking']),
+        'structure' => enumValue((string) ($titleDirIn['structure'] ?? ''), FRAMEFLUX_TITLE_STRUCTURES, $inferredType['title']['structure']),
+        'placement' => enumValue((string) ($titleDirIn['placement'] ?? ''), FRAMEFLUX_TITLE_PLACEMENTS, $inferredType['title']['placement']),
+    ];
+
+    $quoteStyle = enumValue((string) ($quoteDirIn['style'] ?? ''), FRAMEFLUX_QUOTE_STYLES, $inferredType['quote']['style']);
+
+    // The quote must never simply repeat the title face at a smaller size.
+    $titleCategory = FRAMEFLUX_LETTERFORM_CATEGORY[$titleDirection['letterforms']] ?? 'sans';
+    if ((FRAMEFLUX_QUOTE_STYLE_CATEGORY[$quoteStyle] ?? 'serif') === $titleCategory) {
+        $quoteStyle = pickContrastingQuoteStyle(
+            $titleCategory,
+            [$inferredType['quote']['style']],
+            abs(crc32($title . '|' . $genre . '|quote'))
+        );
+        $warnings[] = 'quoteStyle re-paired against title';
+    }
+
+    $quoteDirection = [
+        'style' => $quoteStyle,
+        'pairing' => (FRAMEFLUX_QUOTE_STYLE_CATEGORY[$quoteStyle] ?? 'serif') === $titleCategory ? 'complement' : 'contrast',
+        'legibility' => enumValue(
+            (string) ($quoteDirIn['legibility'] ?? ''),
+            FRAMEFLUX_QUOTE_LEGIBILITY,
+            $inferredType['quote']['legibility']
+        ),
+        'placement' => enumValue(
+            (string) ($quoteDirIn['placement'] ?? ''),
+            FRAMEFLUX_QUOTE_PLACEMENTS,
+            $inferredType['quote']['placement']
+        ),
+    ];
+
     return [
         'schemaVersion' => '1.1',
         'concept' => [
@@ -810,6 +1128,10 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         'typography' => [
             'titleStyle' => $titleStyle,
             'tracking' => $titleStyle === 'condensed' ? -0.02 : ($titleStyle === 'elegant' ? 0.04 : 0),
+            // Locked: genre is an input for interpretation, never poster copy.
+            'genreVisibility' => 'hidden',
+            'title' => $titleDirection,
+            'quote' => $quoteDirection,
         ],
         'variation' => [
             'role' => 'signature',
@@ -849,6 +1171,19 @@ function dnaShapePrompt(): string
   "density": number between 0.2 and 0.85,
   "contrast": number between 0.4 and 1,
   "titleStyle": "bold" | "elegant" | "condensed" | "geometric" | "editorial",
+  "titleTypographyDirection": {
+    "weight": "hairline" | "light" | "regular" | "bold" | "black",
+    "case": "uppercase" | "title" | "lowercase" | "mixed",
+    "letterforms": "classical-serif" | "slab-serif" | "geometric-sans" | "grotesque" | "condensed" | "extended" | "hand-lettered" | "distressed" | "technical-stencil",
+    "tracking": "tight" | "normal" | "wide",
+    "structure": "solid" | "outline" | "fragmented" | "layered" | "textured" | "gradient",
+    "placement": "upper-third" | "lower-third" | "centered" | "split"
+  },
+  "quoteTypographyDirection": {
+    "style": "editorial-italic" | "caption" | "cinematic-subtitle" | "typewriter" | "handwritten",
+    "legibility": "scrim" | "shadow" | "plate" | "none",
+    "placement": "below-title" | "bottom-anchored" | "focal-adjacent"
+  },
   "emotionalCore": "paranoia" | "wonder" | "grief" | "isolation" | "urgency" | "nostalgia" | "dread" | "intimacy" | "triumph" | "unease" | "longing",
   "narrativeCore": "escape" | "investigation" | "forbidden-love" | "survival" | "identity" | "betrayal" | "discovery" | "control" | "family" | "transformation" | "obsession" | "memory",
   "visualMetaphor": "fractured-glass" | "eclipse" | "locked-mechanism" | "decaying-photograph" | "tangled-roots" | "maze" | "burning-document" | "distorted-reflection" | "clock-mechanism" | "biological-cell" | "architectural-ruin" | "orbital-system" | "keyhole" | "map-fold" | "signal" | "silhouette-threshold",
@@ -909,6 +1244,21 @@ Metaphor meanings (these become the poster's narrative anchor object):
 particleSemantics and lineSemantics must match the metaphor (ash for fire, cracks for glass, roads for maps, etc).
 Invent a short original quote. Do not copy the pitch. Max 12 words.
 Cinematic subject describes the still, never poster type.
+
+TYPOGRAPHY IS ART DIRECTION, NOT A TEMPLATE:
+- Genre is NEVER printed on the poster. Do not request a genre label, badge, tag, or single-letter mark.
+  Genre only informs colour, material, lighting, letterforms, and procedural choices.
+- titleTypographyDirection must be derived from the story: weight from how loud it is, case from its
+  emotional register, letterforms from the material language, tracking from how much air the space has,
+  structure from material behaviour (glass wants outline, corroded metal wants textured, smoke wants gradient,
+  fragmented space wants fragmented type).
+- titleTypographyDirection.placement must sit in the composition's negative space, away from the focal mass.
+- quoteTypographyDirection must CONTRAST with the title face, never repeat it smaller. A serif display title
+  pairs with a sans or mono quote; a sans title pairs with an editorial serif quote.
+- quoteTypographyDirection.legibility should feel native to the chosen quote style: editorial and caption
+  styles take a thin scrim, cinematic subtitles take a soft shadow, typewriter and handwritten styles take a
+  translucent plate.
+- The quote must always read as clearly subordinate to the title.
 RULES;
 }
 
@@ -930,6 +1280,14 @@ function assessDnaQuality(array $dna): array
     }
     if (($proc['primaryPattern'] ?? '') === ($proc['secondaryPattern'] ?? '')) {
         $notes[] = 'pattern-collision';
+    }
+
+    $typography = is_array($dna['typography'] ?? null) ? $dna['typography'] : [];
+    if (($typography['genreVisibility'] ?? '') !== 'hidden') {
+        $notes[] = 'genre-visibility-unlocked';
+    }
+    if (($typography['quote']['pairing'] ?? 'contrast') !== 'contrast') {
+        $notes[] = 'quote-pairing-not-contrasting';
     }
 
     $particle = $semantic['particleSemantics'] ?? '';

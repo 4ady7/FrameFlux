@@ -13,6 +13,8 @@ human concept
 
 AI establishes the cinematic world. Visual DNA structures that world. p5.js transforms it. Typography is drawn last, deterministically, never by the image model.
 
+The genre is an input for interpretation only. It steers colour, material, lighting, letterforms and procedural choices, but is never printed on the poster — `typography.genreVisibility` is locked to `hidden` and covered by a test.
+
 ## Use
 
 ```bash
@@ -43,6 +45,15 @@ Flow field, geometric grid, particle scatter, concentric rings, angular mesh.
 ## Layouts
 
 Centered, off-center top, off-center bottom, split editorial, frame inset.
+
+## Typography
+
+Title and quote are separate art-directed decisions in the Visual DNA, derived from the story rather than the genre.
+
+- **Title** (`typography.title`): weight, case, letterforms, tracking, structural treatment (solid, outline, fragmented, layered, textured, gradient) and placement. Scale comes from title length and the safe width; long titles wrap, and a single unbreakable word hard-breaks rather than overflowing.
+- **Quote** (`typography.quote`): style (editorial italic, caption, cinematic subtitle, typewriter, handwritten), its own legibility technique (scrim, shadow, plate) and placement. The quote face is always forced to contrast with the title face instead of repeating it smaller.
+
+Risky treatments are validated against the artwork underneath and degrade to a safer one when local contrast is insufficient. Readability wins over style.
 
 ## Tests
 
