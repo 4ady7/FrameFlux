@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/grammar.php';
+
 const FRAMEFLUX_PATTERNS = ['flow', 'grid', 'particles', 'rings', 'mesh'];
 const FRAMEFLUX_LAYOUTS = [
     'centered',
@@ -11,7 +13,25 @@ const FRAMEFLUX_LAYOUTS = [
     'frame-inset',
 ];
 const FRAMEFLUX_STYLES = ['bold', 'elegant', 'condensed', 'geometric', 'editorial'];
-const FRAMEFLUX_LIGHTING = ['chiaroscuro', 'neon', 'overcast', 'golden-hour', 'moonlit', 'practical', 'harsh', 'rim', 'backlit'];
+const FRAMEFLUX_LIGHTING = [
+    'chiaroscuro',
+    'neon',
+    'overcast',
+    'golden-hour',
+    'moonlit',
+    'practical',
+    'harsh',
+    'rim',
+    'backlit',
+    'high-key',
+    'theatrical',
+    'coastal-haze',
+    'bloom',
+    'hard-sun',
+    'shaft',
+    'domestic-warm',
+    'window-light',
+];
 const FRAMEFLUX_CAMERA = ['wide', 'close', 'aerial', 'dutch', 'tracking', 'static'];
 
 const FRAMEFLUX_METAPHORS = [
@@ -31,6 +51,17 @@ const FRAMEFLUX_METAPHORS = [
     'map-fold',
     'signal',
     'silhouette-threshold',
+    'chaotic-key',
+    'chandelier-cluster',
+    'tangled-cords',
+    'coastal-compass',
+    'handwritten-letter',
+    'weathered-door',
+    'correspondence-clock',
+    'railway-route',
+    'paired-objects',
+    'postcard',
+    'compass-rose',
 ];
 
 const FRAMEFLUX_MATERIALS = [
@@ -48,6 +79,11 @@ const FRAMEFLUX_MATERIALS = [
     'ink',
     'stone',
     'plastic',
+    'foil',
+    'cardstock',
+    'linen',
+    'leather',
+    'brass',
 ];
 
 const FRAMEFLUX_TEXTURES = [
@@ -87,6 +123,10 @@ const FRAMEFLUX_PARTICLE_SEMANTICS = [
     'pollen',
     'debris',
     'grain',
+    'confetti',
+    'salt',
+    'sand',
+    'ember',
 ];
 
 const FRAMEFLUX_LINE_SEMANTICS = [
@@ -98,6 +138,15 @@ const FRAMEFLUX_LINE_SEMANTICS = [
     'roads',
     'circuitry',
     'plans',
+    'cords',
+    'ribbons',
+    'waves',
+    'coastline',
+    'handwriting',
+    'horizon',
+    'contour',
+    'trails',
+    'railway',
 ];
 
 const FRAMEFLUX_EMOTIONS = [
@@ -112,6 +161,8 @@ const FRAMEFLUX_EMOTIONS = [
     'triumph',
     'unease',
     'longing',
+    'playfulness',
+    'hope',
 ];
 
 const FRAMEFLUX_NARRATIVES = [
@@ -180,6 +231,47 @@ const FRAMEFLUX_QUOTE_STYLE_CATEGORY = [
     'handwritten' => 'script',
 ];
 
+const FRAMEFLUX_LIGHTING_ALIASES = [
+    'noir' => 'chiaroscuro',
+    'hard' => 'harsh',
+    'dramatic' => 'chiaroscuro',
+    'neon-wash' => 'neon',
+];
+
+const FRAMEFLUX_METAPHOR_ALIASES = [
+    'lock' => 'locked-mechanism',
+    'clock-face' => 'clock-mechanism',
+    'clock' => 'clock-mechanism',
+    'signal-burst' => 'signal',
+    'silhouette' => 'silhouette-threshold',
+    'roots' => 'tangled-roots',
+];
+
+const FRAMEFLUX_LINE_ALIASES = [
+    'thread' => 'threads',
+    'wave' => 'waves',
+    'trail' => 'trails',
+    'crack' => 'cracks',
+];
+
+const FRAMEFLUX_PARTICLE_ALIASES = [
+    'spark' => 'sparks',
+    'starfield' => 'stars',
+    'crystal-shard' => 'debris',
+];
+
+const FRAMEFLUX_HUMAN_ELEMENTS = [
+    'none',
+    'silhouette',
+    'hands',
+    'letter',
+    'tickets',
+    'cups',
+    'paired-objects',
+    'signage',
+    'map',
+];
+
 const FRAMEFLUX_LAYOUT_ALIASES = [
     'hero' => 'centered',
     'centered' => 'centered',
@@ -202,6 +294,12 @@ const FRAMEFLUX_PATTERN_ALIASES = [
     'mesh' => 'mesh',
     'concentric' => 'rings',
     'angular' => 'mesh',
+    'organic' => 'flow',
+    'topo' => 'flow',
+    'fiber' => 'flow',
+    'halftone' => 'particles',
+    'noise' => 'particles',
+    'none' => 'flow',
 ];
 
 function sanitizeHex(string $value, string $fallback): string
@@ -218,6 +316,49 @@ function enumValue(string $value, array $allowed, string $fallback): string
 {
     $key = strtolower(trim($value));
     return in_array($key, $allowed, true) ? $key : $fallback;
+}
+
+function aliasedEnum(string $value, array $aliases, array $allowed, string $fallback): string
+{
+    $key = strtolower(trim($value));
+    $key = $aliases[$key] ?? $key;
+    return enumValue($key, $allowed, $fallback);
+}
+
+function coerceToList(string $value, array $allowed, string $fallback): string
+{
+    if ($allowed === []) {
+        return $fallback;
+    }
+    return in_array($value, $allowed, true) ? $value : $fallback;
+}
+
+function hexLuminance(string $hex): float
+{
+    $hex = ltrim($hex, '#');
+    if (strlen($hex) !== 6) {
+        return 0.15;
+    }
+    $r = hexdec(substr($hex, 0, 2));
+    $g = hexdec(substr($hex, 2, 2));
+    $b = hexdec(substr($hex, 4, 2));
+    return (0.299 * $r + 0.587 * $g + 0.114 * $b) / 255.0;
+}
+
+function familyEmotionDefault(string $family): string
+{
+    return match ($family) {
+        'comedy', 'animation', 'musical' => 'playfulness',
+        'romance' => 'longing',
+        'contemporary', 'coming-of-age', 'family' => 'nostalgia',
+        'adventure', 'fantasy' => 'wonder',
+        'thriller' => 'urgency',
+        'horror' => 'dread',
+        'scifi' => 'unease',
+        'mystery' => 'unease',
+        'historical', 'documentary' => 'nostalgia',
+        default => 'intimacy',
+    };
 }
 
 function clipText(string $value, int $max, string $fallback = ''): string
@@ -288,6 +429,12 @@ function whitelistPrevious(?array $previous): ?array
         'atmosphere' => $normalized['cinematic']['atmosphere'],
         'camera' => $normalized['cinematic']['camera'],
         'lightDirection' => $normalized['lighting']['direction'],
+        'grammarFamily' => $normalized['semantic']['grammarFamily'],
+        'narrativeEnergy' => $normalized['semantic']['narrativeEnergy'],
+        'compositionGrammar' => $normalized['composition']['grammar'],
+        'proceduralFamily' => $normalized['procedural']['family'],
+        'humanElements' => $normalized['semantic']['humanElements'],
+        'groundTone' => $normalized['semantic']['groundTone'],
     ];
 }
 
@@ -341,24 +488,29 @@ function fallbackQuote(string $title, string $genre, string $pitch, int $seed): 
 
 /**
  * Extract a film-specific semantic profile from title, genre, and pitch.
- * Prefer pitch/title cues over genre stereotypes.
+ * Genre family is a visual grammar: metaphor, material, and line language are
+ * chosen from that family's allow-list. Keyword hits still win when they fit.
  */
 function inferSemanticProfile(string $title, string $genre, string $pitch, int $seed): array
 {
     $text = strtolower($title . ' ' . $genre . ' ' . $pitch);
+    $family = inferGenreFamily($genre, $title . ' ' . $pitch);
+    $grammar = genreGrammar($family);
 
     $emotionRules = [
+        'playfulness' => ['comedy', 'funny', 'joke', 'absurd', 'sitcom', 'hilarious', 'farce', 'screwball', 'punchline'],
         'paranoia' => ['paranoid', 'watch', 'surveil', 'followed', 'suspect', 'trust'],
         'dread' => ['horror', 'haunt', 'curse', 'nightmare', 'terror', 'dread'],
-        'isolation' => ['alone', 'isolat', 'desert', 'empty', 'abandoned', 'lone'],
+        'isolation' => ['alone', 'isolat', 'desert', 'empty', 'abandoned', 'lone', 'solitude'],
         'wonder' => ['wonder', 'magic', 'dream', 'discover', 'star', 'cosmos', 'fantasy'],
         'grief' => ['grief', 'loss', 'mourn', 'funeral', 'widow', 'death', 'goodbye'],
         'urgency' => ['race', 'escape', 'deadline', 'chase', 'countdown', 'heist', 'bomb'],
-        'nostalgia' => ['memory', 'childhood', 'past', 'remember', 'archive', 'letter'],
-        'intimacy' => ['love', 'romance', 'kiss', 'affair', 'heart', 'desire'],
+        'nostalgia' => ['memory', 'childhood', 'past', 'remember', 'archive', 'letter', 'summer'],
+        'intimacy' => ['love', 'romance', 'kiss', 'affair', 'heart', 'desire', 'letters'],
         'triumph' => ['victory', 'win', 'rise', 'champion', 'freedom'],
         'unease' => ['mystery', 'strange', 'uncanny', 'wrong', 'secret'],
-        'longing' => ['miss', 'distant', 'wait', 'yearn', 'away'],
+        'longing' => ['miss', 'distant', 'wait', 'yearn', 'away', 'solitude', 'between'],
+        'hope' => ['hope', 'dawn', 'begin', 'promise'],
     ];
 
     $narrativeRules = [
@@ -371,18 +523,29 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'betrayal' => ['betray', 'double-cross', 'traitor', 'lie'],
         'discovery' => ['discover', 'found', 'map', 'secret city', 'uncover'],
         'control' => ['control', 'system', 'surveil', 'regime', 'algorithm'],
-        'memory' => ['memory', 'remember', 'forget', 'archive', 'photograph'],
+        'memory' => ['memory', 'remember', 'forget', 'archive', 'photograph', 'letter'],
         'transformation' => ['become', 'transform', 'mutation', 'change'],
         'family' => ['family', 'mother', 'father', 'daughter', 'son', 'home'],
     ];
 
     $metaphorRules = [
+        'chaotic-key' => ['mansion', 'rent', 'landlord', 'keyhole', 'key ring'],
+        'chandelier-cluster' => ['chandelier', 'ballroom', 'gala', 'luxury'],
+        'tangled-cords' => ['tangled', 'cords', 'wires', 'mess'],
+        'coastal-compass' => ['cape', 'coast', 'solitude', 'lighthouse', 'sea glass', 'harbour', 'harbor'],
+        'handwritten-letter' => ['letter', 'correspondence', 'handwrit', 'stationery'],
+        'correspondence-clock' => ['station', 'timetable', 'commute', 'between stations'],
+        'railway-route' => ['train', 'railway', 'platform', 'tracks'],
+        'postcard' => ['postcard', 'summer', 'holiday', 'vacation'],
+        'weathered-door' => ['doorway', 'threshold', 'old house', 'porch'],
+        'paired-objects' => ['two', 'pair', 'together', 'between'],
+        'compass-rose' => ['compass', 'expedition', 'voyage', 'navigate'],
         'map-fold' => ['map', 'cartograph', 'city', 'street', 'atlas', 'border'],
         'fractured-glass' => ['glass', 'mirror', 'shatter', 'crack', 'window', 'reflection'],
         'keyhole' => ['key', 'lock', 'vault', 'door', 'secret', 'heist'],
         'locked-mechanism' => ['machine', 'mechanism', 'gear', 'clockwork', 'device'],
         'clock-mechanism' => ['time', 'clock', 'deadline', 'hour', 'countdown'],
-        'decaying-photograph' => ['memory', 'photograph', 'archive', 'letter', 'past'],
+        'decaying-photograph' => ['memory', 'photograph', 'archive', 'past'],
         'tangled-roots' => ['root', 'family', 'forest', 'organic', 'bloodline'],
         'maze' => ['maze', 'labyrinth', 'corridor', 'lost', 'confus'],
         'eclipse' => ['eclipse', 'moon', 'sun', 'shadow', 'orbit'],
@@ -392,18 +555,23 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'biological-cell' => ['body', 'virus', 'blood', 'organic', 'mutation'],
         'architectural-ruin' => ['ruin', 'building', 'concrete', 'collapse', 'cityscape'],
         'signal' => ['signal', 'radio', 'broadcast', 'frequency', 'message'],
-        'silhouette-threshold' => ['doorway', 'threshold', 'figure', 'arrival', 'departure'],
+        'silhouette-threshold' => ['figure', 'arrival', 'departure', 'silhouette'],
     ];
 
     $materialRules = [
-        'glass' => ['glass', 'mirror', 'window', 'crystal'],
+        'glass' => ['glass', 'mirror', 'window', 'crystal', 'chandelier'],
+        'foil' => ['foil', 'luxury', 'glitz', 'mansion'],
+        'cardstock' => ['cardstock', 'ticket', 'stationery', 'brochure'],
+        'linen' => ['linen', 'cloth', 'coast', 'summer'],
+        'leather' => ['leather', 'expedition', 'journal', 'saddle'],
+        'brass' => ['brass', 'compass', 'instrument', 'spyglass'],
         'metal' => ['metal', 'steel', 'copper', 'iron', 'vault', 'machine'],
         'paper' => ['paper', 'letter', 'document', 'map', 'photograph', 'archive'],
         'concrete' => ['concrete', 'bunker', 'brutal', 'parking', 'overpass'],
         'fabric' => ['fabric', 'cloth', 'curtain', 'dress', 'veil'],
         'film-stock' => ['film', 'cinema', 'photograph', 'memory'],
         'smoke' => ['smoke', 'fog', 'haze', 'ash', 'burn'],
-        'water' => ['water', 'river', 'rain', 'ocean', 'flood'],
+        'water' => ['water', 'river', 'rain', 'ocean', 'flood', 'sea', 'coast'],
         'dust' => ['dust', 'desert', 'abandoned', 'attic'],
         'wood' => ['wood', 'cabin', 'forest', 'western'],
         'rust' => ['rust', 'corrosion', 'decay', 'industrial'],
@@ -412,9 +580,12 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'plastic' => ['plastic', 'neon', 'synthetic', 'chrome'],
     ];
 
-    $pick = static function (array $rules, array $fallbackList, string $text, int $seed) {
+    $pickHits = static function (array $rules, string $text, array $allow = []) {
         $hits = [];
         foreach ($rules as $label => $needles) {
+            if ($allow !== [] && !in_array($label, $allow, true)) {
+                continue;
+            }
             foreach ($needles as $needle) {
                 if (str_contains($text, $needle)) {
                     $hits[$label] = ($hits[$label] ?? 0) + 1;
@@ -422,18 +593,32 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
             }
         }
         if ($hits === []) {
-            return $fallbackList[$seed % count($fallbackList)];
+            return null;
         }
         arsort($hits);
         return array_key_first($hits);
     };
 
-    $emotion = $pick($emotionRules, FRAMEFLUX_EMOTIONS, $text, $seed);
-    $narrative = $pick($narrativeRules, FRAMEFLUX_NARRATIVES, $text, $seed + 3);
-    $metaphor = $pick($metaphorRules, FRAMEFLUX_METAPHORS, $text, $seed + 7);
-    $material = $pick($materialRules, FRAMEFLUX_MATERIALS, $text, $seed + 11);
+    $allowedMetaphors = $grammar['metaphors'] ?? FRAMEFLUX_METAPHORS;
+    $allowedMaterials = $grammar['materials'] ?? FRAMEFLUX_MATERIALS;
 
-    // Particle / line semantics follow metaphor and material.
+    $emotion = $pickHits($emotionRules, $text) ?? familyEmotionDefault($family);
+    $narrative = $pickHits($narrativeRules, $text) ?? FRAMEFLUX_NARRATIVES[($seed + 3) % count(FRAMEFLUX_NARRATIVES)];
+
+    $hint = storyMetaphorHint($title . ' ' . $pitch, $allowedMetaphors);
+    $metaphor = $hint ?? $pickHits($metaphorRules, $text) ?? pickFromGrammar($allowedMetaphors, $seed + 7);
+    if (!in_array($metaphor, FRAMEFLUX_METAPHORS, true)) {
+        $metaphor = pickFromGrammar($allowedMetaphors, $seed + 7);
+    }
+
+    $material = $pickHits($materialRules, $text, $allowedMaterials)
+        ?? $pickHits($materialRules, $text)
+        ?? pickFromGrammar($allowedMaterials, $seed + 11);
+    if (!in_array($material, $allowedMaterials, true) && in_array($material, ['metal', 'plastic', 'concrete'], true) && !isTechFamily($family)) {
+        $material = pickFromGrammar($allowedMaterials, $seed + 11);
+    }
+    $material = in_array($material, FRAMEFLUX_MATERIALS, true) ? $material : pickFromGrammar($allowedMaterials, $seed + 11);
+
     $particleMap = [
         'burning-document' => 'ash',
         'eclipse' => 'stars',
@@ -444,6 +629,17 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'map-fold' => 'dust',
         'signal' => 'sparks',
         'biological-cell' => 'pollen',
+        'chaotic-key' => 'confetti',
+        'chandelier-cluster' => 'confetti',
+        'tangled-cords' => 'confetti',
+        'coastal-compass' => 'salt',
+        'handwritten-letter' => 'dust',
+        'correspondence-clock' => 'dust',
+        'railway-route' => 'dust',
+        'postcard' => 'pollen',
+        'compass-rose' => 'sand',
+        'weathered-door' => 'dust',
+        'paired-objects' => 'dust',
     ];
     $lineMap = [
         'fractured-glass' => 'cracks',
@@ -457,15 +653,45 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'biological-cell' => 'veins',
         'decaying-photograph' => 'threads',
         'architectural-ruin' => 'plans',
+        'chaotic-key' => 'cords',
+        'chandelier-cluster' => 'ribbons',
+        'tangled-cords' => 'cords',
+        'coastal-compass' => 'waves',
+        'handwritten-letter' => 'handwriting',
+        'correspondence-clock' => 'railway',
+        'railway-route' => 'railway',
+        'postcard' => 'horizon',
+        'compass-rose' => 'contour',
+        'weathered-door' => 'horizon',
+        'paired-objects' => 'threads',
     ];
 
-    $particle = $particleMap[$metaphor] ?? FRAMEFLUX_PARTICLE_SEMANTICS[($seed + 5) % count(FRAMEFLUX_PARTICLE_SEMANTICS)];
-    $line = $lineMap[$metaphor] ?? FRAMEFLUX_LINE_SEMANTICS[($seed + 9) % count(FRAMEFLUX_LINE_SEMANTICS)];
+    $allowedParticles = $grammar['particleSemantics'] ?? FRAMEFLUX_PARTICLE_SEMANTICS;
+    $allowedLines = $grammar['lineSemantics'] ?? FRAMEFLUX_LINE_SEMANTICS;
+    $particle = coerceToList(
+        $particleMap[$metaphor] ?? pickFromGrammar($allowedParticles, $seed + 5),
+        $allowedParticles,
+        pickFromGrammar($allowedParticles, $seed + 5)
+    );
+    $line = coerceToList(
+        $lineMap[$metaphor] ?? pickFromGrammar($allowedLines, $seed + 9),
+        $allowedLines,
+        pickFromGrammar($allowedLines, $seed + 9)
+    );
+
+    if (!isTechFamily($family) && in_array($line, FRAMEFLUX_TECH_LINES, true)) {
+        $line = pickFromGrammar($allowedLines, $seed + 9);
+    }
 
     $textureMap = [
         'glass' => 'glossy',
+        'foil' => 'glossy',
         'metal' => 'scratched',
+        'brass' => 'corroded',
+        'leather' => 'weathered',
         'paper' => 'fibrous',
+        'cardstock' => 'fibrous',
+        'linen' => 'fibrous',
         'concrete' => 'weathered',
         'fabric' => 'fibrous',
         'film-stock' => 'photographic',
@@ -478,7 +704,12 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'stone' => 'weathered',
         'plastic' => 'smooth',
     ];
-    $texture = $textureMap[$material] ?? 'grainy';
+    $allowedTextures = $grammar['textures'] ?? FRAMEFLUX_TEXTURES;
+    $texture = coerceToList(
+        $textureMap[$material] ?? pickFromGrammar($allowedTextures, $seed + 13),
+        $allowedTextures,
+        pickFromGrammar($allowedTextures, $seed + 13)
+    );
 
     $spatialMap = [
         'paranoia' => 'claustrophobic',
@@ -491,8 +722,38 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'discovery' => 'expanding',
         'control' => 'compressed',
         'transformation' => 'spiralling',
+        'playfulness' => 'fragmented',
+        'longing' => 'drifting',
+        'nostalgia' => 'isolated',
+        'intimacy' => 'isolated',
+        'hope' => 'rising',
     ];
-    $spatial = $spatialMap[$emotion] ?? ($spatialMap[$narrative] ?? FRAMEFLUX_SPATIAL[$seed % count(FRAMEFLUX_SPATIAL)]);
+    $allowedSpatial = $grammar['spatialFeelings'] ?? FRAMEFLUX_SPATIAL;
+    $spatial = coerceToList(
+        $spatialMap[$emotion] ?? ($spatialMap[$narrative] ?? pickFromGrammar($allowedSpatial, $seed)),
+        $allowedSpatial,
+        pickFromGrammar($allowedSpatial, $seed)
+    );
+
+    $compositionGrammar = pickFromGrammar($grammar['compositionGrammars'] ?? COMPOSITION_GRAMMARS, $seed + 17);
+    $procPrimary = pickFromGrammar($grammar['proceduralPrimary'] ?? PROCEDURAL_FAMILIES, $seed + 19);
+    $procSecondary = pickFromGrammar($grammar['proceduralSecondary'] ?? PROCEDURAL_FAMILIES, $seed + 23);
+    if ($procSecondary === $procPrimary) {
+        $procSecondary = pickFromGrammar($grammar['proceduralSecondary'] ?? PROCEDURAL_FAMILIES, $seed + 29);
+    }
+    $procAccent = pickFromGrammar($grammar['proceduralAccent'] ?? ['particle'], $seed + 31);
+    $human = pickFromGrammar(($grammar['humanElements'] ?? []) !== [] ? $grammar['humanElements'] : ['none'], $seed + 37);
+    if ($human === '') {
+        $human = 'none';
+    }
+
+    $energy = (float) ($grammar['narrativeEnergyDefault'] ?? 0.5);
+    if ($emotion === 'playfulness' || $emotion === 'urgency' || $emotion === 'triumph') {
+        $energy = min(0.95, $energy + 0.08);
+    }
+    if ($emotion === 'isolation' || $emotion === 'longing' || $emotion === 'grief' || $emotion === 'nostalgia') {
+        $energy = max(0.12, $energy - 0.08);
+    }
 
     return [
         'emotionalCore' => $emotion,
@@ -504,11 +765,23 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'spatial' => $spatial,
         'particleSemantics' => $particle,
         'lineSemantics' => $line,
+        'grammarFamily' => $family,
+        'narrativeEnergy' => round($energy, 2),
+        'compositionGrammar' => $compositionGrammar,
+        'proceduralFamily' => $procPrimary,
+        'proceduralSecondaryFamily' => $procSecondary,
+        'proceduralAccent' => $procAccent,
+        'humanElements' => $human,
+        'groundTone' => $grammar['groundTone'] ?? 'mid',
+        'lightingStyle' => pickFromGrammar($grammar['lightingStyles'] ?? FRAMEFLUX_LIGHTING, $seed + 41),
     ];
 }
 
 function patternForSemantic(array $semantic, int $seed): array
 {
+    $family = (string) ($semantic['grammarFamily'] ?? inferGenreFamily('drama'));
+    $grammar = genreGrammar($family);
+    $allowed = $grammar['patterns'] ?? FRAMEFLUX_PATTERNS;
     $metaphor = $semantic['visualMetaphor'];
     $spatial = $semantic['spatial'];
     $primaryMap = [
@@ -528,35 +801,75 @@ function patternForSemantic(array $semantic, int $seed): array
         'map-fold' => 'grid',
         'signal' => 'rings',
         'silhouette-threshold' => 'flow',
+        'chaotic-key' => 'flow',
+        'chandelier-cluster' => 'particles',
+        'tangled-cords' => 'flow',
+        'coastal-compass' => 'flow',
+        'handwritten-letter' => 'flow',
+        'weathered-door' => 'flow',
+        'correspondence-clock' => 'flow',
+        'railway-route' => 'flow',
+        'paired-objects' => 'particles',
+        'postcard' => 'particles',
+        'compass-rose' => 'flow',
     ];
-    $primary = $primaryMap[$metaphor] ?? FRAMEFLUX_PATTERNS[$seed % count(FRAMEFLUX_PATTERNS)];
+    $primary = $primaryMap[$metaphor] ?? pickFromGrammar($allowed, $seed);
     if ($spatial === 'fragmented' || $spatial === 'collapsing') {
-        $primary = 'mesh';
+        $primary = in_array('flow', $allowed, true) ? 'flow' : $primary;
+        if (isTechFamily($family)) {
+            $primary = 'mesh';
+        }
     } elseif ($spatial === 'spiralling' || $spatial === 'converging') {
-        $primary = 'rings';
+        $primary = in_array('rings', $allowed, true) ? 'rings' : $primary;
     } elseif ($spatial === 'drifting' || $spatial === 'expansive') {
         $primary = $primary === 'grid' ? 'flow' : $primary;
     }
-    $secondary = nextPattern($primary);
-    if (in_array($semantic['particleSemantics'], ['ash', 'dust', 'sparks', 'stars'], true)) {
+
+    $primary = coerceToList($primary, $allowed, pickFromGrammar($allowed, $seed));
+    if (!isTechFamily($family) && in_array($primary, FRAMEFLUX_TECH_PATTERNS, true)) {
+        $primary = in_array('flow', $allowed, true) ? 'flow' : pickFromGrammar($allowed, $seed);
+    }
+
+    $secondary = count($allowed) > 1
+        ? $allowed[(array_search($primary, $allowed, true) + 1) % count($allowed)]
+        : nextPattern($primary);
+    if (in_array($semantic['particleSemantics'], ['ash', 'dust', 'sparks', 'stars', 'confetti', 'salt', 'sand'], true)
+        && in_array('particles', $allowed, true)) {
         $secondary = 'particles';
     }
     if ($secondary === $primary) {
         $secondary = nextPattern($primary);
+        $secondary = coerceToList($secondary, $allowed, $secondary);
+        if ($secondary === $primary && count($allowed) > 1) {
+            $secondary = $allowed[0] === $primary ? $allowed[1] : $allowed[0];
+        }
+    }
+    if (!isTechFamily($family) && in_array($secondary, FRAMEFLUX_TECH_PATTERNS, true)) {
+        $secondary = 'particles';
     }
     return [$primary, $secondary];
 }
 
 function layoutForSemantic(array $semantic, int $seed): string
 {
-    return match ($semantic['spatial']) {
-        'isolated', 'expansive' => 'centered',
-        'rising', 'expanding' => 'off-center-bottom',
-        'compressed', 'claustrophobic' => 'frame-inset',
-        'fragmented' => 'split-editorial',
-        'drifting' => 'off-center-top',
-        default => FRAMEFLUX_LAYOUTS[intdiv($seed, 3) % count(FRAMEFLUX_LAYOUTS)],
-    };
+    $family = (string) ($semantic['grammarFamily'] ?? 'drama');
+    $composition = (string) ($semantic['compositionGrammar'] ?? '');
+    if ($composition !== '') {
+        $layout = layoutForComposition($composition, $seed);
+    } else {
+        $layout = match ($semantic['spatial'] ?? '') {
+            'isolated', 'expansive' => 'centered',
+            'rising', 'expanding' => 'off-center-bottom',
+            'compressed', 'claustrophobic' => isTechFamily($family) ? 'frame-inset' : 'split-editorial',
+            'fragmented' => 'split-editorial',
+            'drifting' => 'off-center-top',
+            default => FRAMEFLUX_LAYOUTS[intdiv($seed, 3) % count(FRAMEFLUX_LAYOUTS)],
+        };
+    }
+    if ($layout === 'frame-inset' && !isTechFamily($family)) {
+        $layout = 'split-editorial';
+    }
+    return $layout;
 }
 
 /**
@@ -594,29 +907,43 @@ function inferTypographyDirection(array $semantic, string $genre, int $seed): ar
     $texture = $semantic['texture'];
     $spatial = $semantic['spatial'];
     $g = strtolower($genre);
+    $family = (string) ($semantic['grammarFamily'] ?? inferGenreFamily($genre));
+    $grammar = genreGrammar($family);
 
     // Letterforms follow what the poster is made of.
     $letterforms = match ($material) {
-        'glass', 'plastic' => 'geometric-sans',
+        'glass', 'plastic', 'foil' => 'geometric-sans',
         'water' => 'grotesque',
         'metal' => 'technical-stencil',
+        'brass' => 'slab-serif',
         'rust' => 'condensed',
-        'paper', 'ink' => 'classical-serif',
+        'paper', 'ink', 'cardstock' => 'classical-serif',
+        'linen', 'fabric' => 'classical-serif',
+        'leather' => 'slab-serif',
         'film-stock' => 'grotesque',
         'concrete' => 'extended',
         'stone' => 'extended',
-        'fabric' => 'classical-serif',
         'wood' => 'slab-serif',
         'smoke', 'dust' => 'distressed',
         default => 'grotesque',
     };
-    if ($emotion === 'intimacy' && in_array($material, ['fabric', 'paper'], true)) {
+    if ($emotion === 'intimacy' && in_array($material, ['fabric', 'paper', 'linen', 'cardstock'], true)) {
         $letterforms = 'hand-lettered';
     }
-    if ($narrative === 'control' && $material !== 'paper') {
+    if ($narrative === 'control' && $material !== 'paper' && isTechFamily($family)) {
         $letterforms = 'technical-stencil';
     }
-    // Comedy resists heavy institutional letterforms.
+    if (in_array($family, ['comedy', 'animation', 'musical'], true)) {
+        if (in_array($letterforms, ['technical-stencil', 'distressed', 'classical-serif'], true)) {
+            $letterforms = 'extended';
+        }
+    }
+    if (in_array($family, ['romance', 'contemporary', 'coming-of-age'], true) && $letterforms === 'technical-stencil') {
+        $letterforms = 'classical-serif';
+    }
+    if ($family === 'contemporary' && $letterforms === 'hand-lettered') {
+        $letterforms = 'classical-serif';
+    }
     if (str_contains($g, 'comedy') && $letterforms === 'technical-stencil') {
         $letterforms = 'extended';
     }
@@ -624,16 +951,16 @@ function inferTypographyDirection(array $semantic, string $genre, int $seed): ar
     // Case treatment follows emotional register.
     $case = match ($emotion) {
         'intimacy', 'longing', 'grief' => 'lowercase',
-        'nostalgia' => 'title',
+        'nostalgia', 'hope' => 'title',
+        'playfulness' => 'mixed',
         'urgency', 'paranoia', 'dread', 'triumph' => 'uppercase',
         'wonder' => 'title',
         'isolation' => 'lowercase',
         default => 'uppercase',
     };
 
-    // Weight follows how loud the story is.
     $weight = match ($emotion) {
-        'urgency', 'triumph' => 'black',
+        'urgency', 'triumph', 'playfulness' => 'black',
         'dread', 'paranoia' => 'bold',
         'intimacy', 'longing' => 'light',
         'isolation' => 'hairline',
@@ -654,15 +981,15 @@ function inferTypographyDirection(array $semantic, string $genre, int $seed): ar
     // Structure follows material behaviour and spatial break-up.
     $structure = match (true) {
         in_array($spatial, ['fragmented', 'collapsing'], true) => 'fragmented',
-        $material === 'glass' => 'outline',
-        in_array($material, ['metal', 'rust'], true) => 'textured',
+        $material === 'glass' || $material === 'foil' => $family === 'comedy' ? 'layered' : 'outline',
+        in_array($material, ['metal', 'rust', 'brass'], true) => 'textured',
         in_array($texture, ['corroded', 'scratched', 'weathered'], true) => 'textured',
         in_array($material, ['smoke', 'dust'], true) => 'gradient',
         in_array($material, ['concrete', 'stone'], true) => 'layered',
         default => 'solid',
     };
+    $structure = coerceToList($structure, $grammar['titleTreatmentBias'] ?? FRAMEFLUX_TITLE_STRUCTURES, $structure);
 
-    // Placement keeps the title out of the focal mass.
     $placement = match ($spatial) {
         'rising', 'expanding' => 'lower-third',
         'drifting' => 'upper-third',
@@ -671,10 +998,9 @@ function inferTypographyDirection(array $semantic, string $genre, int $seed): ar
         'claustrophobic', 'compressed' => 'lower-third',
         default => FRAMEFLUX_TITLE_PLACEMENTS[$seed % count(FRAMEFLUX_TITLE_PLACEMENTS)],
     };
+    $placement = coerceToList($placement, $grammar['titlePlacementBias'] ?? FRAMEFLUX_TITLE_PLACEMENTS, $placement);
 
-    // Quote style follows how the story is "recorded", in preference order, so a
-    // clash with the title face falls through to the next meaningful choice.
-    $quotePrefs = [];
+    $quotePrefs = $grammar['quoteStyleBias'] ?? [];
     if ($material === 'film-stock' || $texture === 'photographic') {
         $quotePrefs[] = 'cinematic-subtitle';
     }
@@ -687,11 +1013,10 @@ function inferTypographyDirection(array $semantic, string $genre, int $seed): ar
     if (in_array($emotion, ['nostalgia', 'grief', 'longing'], true)) {
         $quotePrefs[] = 'editorial-italic';
     }
-    if (in_array($emotion, ['urgency', 'paranoia', 'dread'], true)) {
+    if (in_array($emotion, ['urgency', 'paranoia', 'dread', 'playfulness'], true)) {
         $quotePrefs[] = 'caption';
     }
-    // Secondary cues, kept narrow so they do not swamp the seeded rotation.
-    if ($material === 'fabric') {
+    if ($material === 'fabric' || $material === 'linen') {
         $quotePrefs[] = 'handwritten';
     }
     if (in_array($emotion, ['wonder', 'triumph'], true)) {
@@ -750,87 +1075,84 @@ function fallbackVisualParams(
     string $mode,
     ?array $previous
 ): array {
-    $key = strtolower($genre . ' ' . $pitch . ' ' . $title);
     $seed = abs(crc32($title . '|' . $genre . '|' . $pitch . '|' . $variation . '|' . $mode));
     $semantic = inferSemanticProfile($title, $genre, $pitch, $seed);
 
     if ($mode === 'improve' && is_array($previous)) {
-        // Keep metaphor/material identity; shift spatial emphasis and secondary pattern only.
-        $semantic['visualMetaphor'] = enumValue((string) ($previous['visualMetaphor'] ?? $semantic['visualMetaphor']), FRAMEFLUX_METAPHORS, $semantic['visualMetaphor']);
-        $semantic['narrativeAnchor'] = enumValue((string) ($previous['narrativeAnchor'] ?? $semantic['narrativeAnchor']), FRAMEFLUX_METAPHORS, $semantic['narrativeAnchor']);
-        $semantic['material'] = enumValue((string) ($previous['material'] ?? $semantic['material']), FRAMEFLUX_MATERIALS, $semantic['material']);
+        $family = (string) ($previous['grammarFamily'] ?? $semantic['grammarFamily']);
+        $grammar = genreGrammar($family);
+        $allowedMetaphors = $grammar['metaphors'] ?? FRAMEFLUX_METAPHORS;
+        $allowedMaterials = $grammar['materials'] ?? FRAMEFLUX_MATERIALS;
+        $semantic['grammarFamily'] = $family;
+        $semantic['visualMetaphor'] = coerceToList(
+            aliasedEnum((string) ($previous['visualMetaphor'] ?? $semantic['visualMetaphor']), FRAMEFLUX_METAPHOR_ALIASES, FRAMEFLUX_METAPHORS, $semantic['visualMetaphor']),
+            $allowedMetaphors,
+            $semantic['visualMetaphor']
+        );
+        $semantic['narrativeAnchor'] = $semantic['visualMetaphor'];
+        $semantic['material'] = coerceToList(
+            enumValue((string) ($previous['material'] ?? $semantic['material']), FRAMEFLUX_MATERIALS, $semantic['material']),
+            $allowedMaterials,
+            $semantic['material']
+        );
         $semantic['emotionalCore'] = enumValue((string) ($previous['emotionalCore'] ?? $semantic['emotionalCore']), FRAMEFLUX_EMOTIONS, $semantic['emotionalCore']);
         $semantic['narrativeCore'] = enumValue((string) ($previous['narrativeCore'] ?? $semantic['narrativeCore']), FRAMEFLUX_NARRATIVES, $semantic['narrativeCore']);
-        $semantic['spatial'] = FRAMEFLUX_SPATIAL[($seed + 1) % count(FRAMEFLUX_SPATIAL)];
+        $semantic['humanElements'] = enumValue((string) ($previous['humanElements'] ?? $semantic['humanElements'] ?? 'none'), FRAMEFLUX_HUMAN_ELEMENTS, $semantic['humanElements'] ?? 'none');
+        $semantic['groundTone'] = $grammar['groundTone'] ?? $semantic['groundTone'];
+        $semantic['spatial'] = coerceToList(
+            FRAMEFLUX_SPATIAL[($seed + 1) % count(FRAMEFLUX_SPATIAL)],
+            $grammar['spatialFeelings'] ?? FRAMEFLUX_SPATIAL,
+            $semantic['spatial']
+        );
+        $semantic['compositionGrammar'] = pickFromGrammar($grammar['compositionGrammars'] ?? COMPOSITION_GRAMMARS, $seed + 17);
+        $semantic['narrativeEnergy'] = (float) ($previous['narrativeEnergy'] ?? $semantic['narrativeEnergy']);
     }
 
     if ($mode === 'reimagine' && is_array($previous)) {
-        // New metaphor while staying on the same narrative family when possible.
-        $idx = array_search($semantic['visualMetaphor'], FRAMEFLUX_METAPHORS, true);
-        $semantic['visualMetaphor'] = FRAMEFLUX_METAPHORS[(($idx === false ? 0 : $idx) + 3 + ($seed % 4)) % count(FRAMEFLUX_METAPHORS)];
+        $family = (string) ($previous['grammarFamily'] ?? $semantic['grammarFamily']);
+        $grammar = genreGrammar($family);
+        $allowedMetaphors = $grammar['metaphors'] ?? FRAMEFLUX_METAPHORS;
+        $allowedMaterials = $grammar['materials'] ?? FRAMEFLUX_MATERIALS;
+        $semantic['grammarFamily'] = $family;
+        $current = array_search($semantic['visualMetaphor'], $allowedMetaphors, true);
+        $semantic['visualMetaphor'] = $allowedMetaphors[(($current === false ? 0 : $current) + 1 + ($seed % max(1, count($allowedMetaphors) - 1))) % count($allowedMetaphors)];
         $semantic['narrativeAnchor'] = $semantic['visualMetaphor'];
-        $semantic['material'] = FRAMEFLUX_MATERIALS[($seed + 4) % count(FRAMEFLUX_MATERIALS)];
-        $semantic['spatial'] = FRAMEFLUX_SPATIAL[($seed + 2) % count(FRAMEFLUX_SPATIAL)];
+        $semantic['material'] = pickFromGrammar($allowedMaterials, $seed + 4);
+        $semantic['spatial'] = pickFromGrammar($grammar['spatialFeelings'] ?? FRAMEFLUX_SPATIAL, $seed + 2);
+        $semantic['compositionGrammar'] = pickFromGrammar($grammar['compositionGrammars'] ?? COMPOSITION_GRAMMARS, $seed + 8);
+        $semantic['groundTone'] = $grammar['groundTone'] ?? $semantic['groundTone'];
+        $semantic['lightingStyle'] = pickFromGrammar($grammar['lightingStyles'] ?? FRAMEFLUX_LIGHTING, $seed + 41);
+        $semantic['lineSemantics'] = pickFromGrammar($grammar['lineSemantics'] ?? FRAMEFLUX_LINE_SEMANTICS, $seed + 9);
+        $semantic['particleSemantics'] = pickFromGrammar($grammar['particleSemantics'] ?? FRAMEFLUX_PARTICLE_SEMANTICS, $seed + 5);
+        $semantic['humanElements'] = pickFromGrammar(($grammar['humanElements'] ?? []) !== [] ? $grammar['humanElements'] : ['none'], $seed + 37) ?: 'none';
     }
 
-    $palettes = [
-        'glass' => ['#0b1218', '#1c3a4a', '#6ea0b4', '#d7e8ef', '#f4f8fa'],
-        'metal' => ['#101214', '#3a3f46', '#8a929b', '#c9a24a', '#ece7dc'],
-        'paper' => ['#1a1510', '#5a4030', '#b08968', '#e7d3b0', '#f7efe2'],
-        'concrete' => ['#121416', '#3b4046', '#7a828a', '#c2b8a3', '#efece6'],
-        'fabric' => ['#171018', '#5a2a3c', '#a85d74', '#e2b7c2', '#f6ecef'],
-        'film-stock' => ['#140f0c', '#4a2f1a', '#a8673a', '#e0b37a', '#f3e6d4'],
-        'smoke' => ['#0d0e12', '#2c3340', '#6d7888', '#b9c0c9', '#e8ebef'],
-        'water' => ['#061018', '#0f3a4a', '#1f7f8f', '#7fd0d8', '#e7f7f8'],
-        'dust' => ['#17130e', '#5a4632', '#a8875a', '#d8c29a', '#f2e8d4'],
-        'wood' => ['#140f0a', '#4a2f18', '#8a5a28', '#d2a46a', '#f0e0c4'],
-        'rust' => ['#140c0a', '#5a2414', '#a84820', '#d4a06a', '#f0e2cc'],
-        'ink' => ['#0c1016', '#1c2a44', '#3d5c7a', '#b9a06a', '#efe6d2'],
-        'stone' => ['#121110', '#3c3934', '#7a7468', '#cfc6b4', '#f1ece2'],
-        'plastic' => ['#0a0c14', '#1e3cff', '#ff4d6d', '#ffe36b', '#ffffff'],
-    ];
-
-    $genrePalettes = [
-        'horror' => ['#12080c', '#3b0d16', '#7a1f2b', '#c45c2a', '#f3e6d4'],
-        'sci-fi' => ['#061018', '#0b3a4a', '#148f9a', '#7ef0d2', '#e8fff8'],
-        'romance' => ['#1c0d14', '#5c1f33', '#c45d6b', '#e8b4a2', '#f7efe8'],
-        'comedy' => ['#14110a', '#d4550a', '#f08a2a', '#f2e27a', '#fff8e8'],
-        'action' => ['#0c0c0c', '#8a1c12', '#e23a1a', '#f0a050', '#f5f1ea'],
-        'thriller' => ['#0a1014', '#163044', '#2a6f8f', '#c9d6df', '#eef4f7'],
-        'drama' => ['#15110d', '#3a2a1c', '#8a5a32', '#d8b48a', '#f4ead8'],
-        'fantasy' => ['#0d0a18', '#2a1b4a', '#6b3fa0', '#d4a84b', '#f3ead4'],
-        'documentary' => ['#101010', '#2c2c2c', '#6e6e6e', '#c8c4b8', '#f2f0ea'],
-        'mystery' => ['#0c1018', '#1c2a44', '#3d5c7a', '#b9a06a', '#efe6d2'],
-        'animation' => ['#10141c', '#1e5cff', '#ff5d3a', '#ffe36b', '#ffffff'],
-        'western' => ['#16100a', '#5a3214', '#b56a28', '#e6c17a', '#f6ecd4'],
-    ];
-
-    [$bg, $primary, $secondary, $accent, $text] = $palettes[$semantic['material']] ?? $genrePalettes['drama'];
-    foreach ($genrePalettes as $name => $unused) {
-        if (str_contains($key, $name)) {
-            // Blend: keep material-led palette but allow genre accent pull for familiarity.
-            $accent = $genrePalettes[$name][3];
-            break;
-        }
-    }
+    $grammar = genreGrammar((string) $semantic['grammarFamily']);
+    $preset = paletteFromGrammar($grammar, $seed);
+    $ground = (string) ($semantic['groundTone'] ?? $grammar['groundTone'] ?? 'mid');
+    $bg = $preset['bg'];
+    $text = $preset['ink'];
+    $accent = $preset['acc'];
+    $highlight = $preset['hi'];
+    $secondary = $preset['mute'];
+    $primary = $preset['acc'];
 
     [$pattern, $secondPat] = patternForSemantic($semantic, $seed);
     $layout = layoutForSemantic($semantic, $seed);
     $titleStyle = match ($semantic['emotionalCore']) {
         'intimacy', 'nostalgia', 'grief', 'longing' => 'elegant',
         'urgency', 'paranoia', 'control' => 'condensed',
+        'playfulness' => 'geometric',
         'wonder', 'triumph' => 'editorial',
         default => 'bold',
     };
 
-    $lighting = match ($semantic['material']) {
-        'glass', 'water' => 'backlit',
-        'metal', 'rust' => 'harsh',
-        'paper', 'fabric' => 'practical',
-        'smoke', 'dust' => 'moonlit',
-        'plastic' => 'neon',
-        default => FRAMEFLUX_LIGHTING[$seed % count(FRAMEFLUX_LIGHTING)],
-    };
+    $lighting = aliasedEnum(
+        (string) ($semantic['lightingStyle'] ?? ''),
+        FRAMEFLUX_LIGHTING_ALIASES,
+        FRAMEFLUX_LIGHTING,
+        pickFromGrammar($grammar['lightingStyles'] ?? FRAMEFLUX_LIGHTING, $seed)
+    );
 
     $camera = match ($semantic['spatial']) {
         'claustrophobic', 'compressed' => 'close',
@@ -838,6 +1160,24 @@ function fallbackVisualParams(
         'spiralling' => 'dutch',
         'isolated' => 'static',
         default => FRAMEFLUX_CAMERA[intdiv($seed, 5) % count(FRAMEFLUX_CAMERA)],
+    };
+
+    $energy = (float) ($semantic['narrativeEnergy'] ?? 0.5);
+    $density = round(clamp(0.22 + $energy * 0.52 + (($seed % 9) / 100), 0.2, 0.85), 2);
+    $shadow = $ground === 'light' ? 0.22 + ($seed % 12) / 100 : ($ground === 'mid' ? 0.38 + ($seed % 16) / 100 : 0.55 + ($seed % 22) / 100);
+    $contrast = $lighting === 'high-key' ? 0.58 : ($lighting === 'chiaroscuro' || $lighting === 'hard-sun' ? 0.86 : 0.72);
+
+    $comp = (string) ($semantic['compositionGrammar'] ?? 'central');
+    $focalX = match ($comp) {
+        'asymmetric', 'editorial', 'diagonal' => 0.34 + ($seed % 12) / 100,
+        'crowded' => 0.46 + ($seed % 18) / 100,
+        default => 0.44 + ($seed % 14) / 100,
+    };
+    $focalY = match ($comp) {
+        'expansive', 'organic' => 0.4 + (($seed >> 3) % 10) / 100,
+        'crowded', 'diagonal' => 0.46 + (($seed >> 3) % 16) / 100,
+        'editorial' => 0.38 + (($seed >> 3) % 12) / 100,
+        default => 0.4 + (($seed >> 3) % 14) / 100,
     };
 
     $typeDirection = inferTypographyDirection($semantic, $genre, $seed);
@@ -849,7 +1189,7 @@ function fallbackVisualParams(
             'secondary' => $secondary,
             'accent' => $accent,
             'text' => $text,
-            'highlight' => $accent,
+            'highlight' => $highlight,
             'neutral' => $text,
         ],
         'pattern' => $pattern,
@@ -859,8 +1199,8 @@ function fallbackVisualParams(
         'quoteTypographyDirection' => $typeDirection['quote'],
         'mood' => $semantic['emotionalCore'] . ' · ' . $semantic['narrativeCore'],
         'quote' => fallbackQuote($title, $genre, $pitch, $seed),
-        'density' => 0.4 + ($seed % 35) / 100,
-        'contrast' => 0.74,
+        'density' => $density,
+        'contrast' => $contrast,
         'titleStyle' => $titleStyle,
         'emotionalCore' => $semantic['emotionalCore'],
         'narrativeCore' => $semantic['narrativeCore'],
@@ -871,19 +1211,27 @@ function fallbackVisualParams(
         'spatial' => $semantic['spatial'],
         'particleSemantics' => $semantic['particleSemantics'],
         'lineSemantics' => $semantic['lineSemantics'],
+        'grammarFamily' => $semantic['grammarFamily'],
+        'narrativeEnergy' => $energy,
+        'compositionGrammar' => $comp,
+        'proceduralFamily' => $semantic['proceduralFamily'] ?? 'organic',
+        'proceduralSecondaryFamily' => $semantic['proceduralSecondaryFamily'] ?? 'tactile',
+        'proceduralAccent' => $semantic['proceduralAccent'] ?? 'particle',
+        'humanElements' => $semantic['humanElements'] ?? 'none',
+        'groundTone' => $ground,
         'lightDirection' => 0.15 + ($seed % 70) / 100,
-        'shadowDensity' => 0.45 + ($seed % 40) / 100,
+        'shadowDensity' => $shadow,
         'cinematic' => [
             'subject' => str_replace('-', ' ', $semantic['narrativeAnchor']),
             'environment' => $semantic['material'] . ' space under ' . $lighting . ' light',
             'lighting' => $lighting,
             'atmosphere' => $semantic['texture'] . ' ' . $semantic['material'],
             'camera' => $camera,
-            'tension' => 0.35 + ($seed % 50) / 100,
-            'intensity' => 0.4 + ($seed % 45) / 100,
+            'tension' => round(clamp(0.2 + $energy * 0.55, 0, 1), 2),
+            'intensity' => round(clamp(0.3 + $energy * 0.5, 0.2, 1), 2),
         ],
-        'focalX' => 0.42 + ($seed % 16) / 100,
-        'focalY' => 0.38 + (($seed >> 3) % 18) / 100,
+        'focalX' => $focalX,
+        'focalY' => $focalY,
     ];
 }
 
@@ -924,22 +1272,31 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
     $quote = clipText((string) ($conceptIn['quote'] ?? $params['quote'] ?? ''), 120, 'A story waiting for its first frame.');
     $mood = clipText((string) ($conceptIn['mood'] ?? $params['mood'] ?? 'cinematic'), 80, 'cinematic');
 
-    $lighting = enumValue(
-        (string) ($cinematicIn['lighting'] ?? $lightingIn['type'] ?? ''),
-        FRAMEFLUX_LIGHTING,
-        'chiaroscuro'
-    );
-    $camera = enumValue(
-        (string) ($cinematicIn['camera'] ?? ''),
-        FRAMEFLUX_CAMERA,
-        'wide'
-    );
-
     $inferred = inferSemanticProfile(
         $title,
         $genre,
         $pitch,
         abs(crc32($title . '|' . $genre . '|' . $pitch))
+    );
+
+    $family = enumValue(
+        (string) ($semanticIn['grammarFamily'] ?? $params['grammarFamily'] ?? $inferred['grammarFamily'] ?? ''),
+        GENRE_FAMILIES,
+        $inferred['grammarFamily']
+    );
+    $grammar = genreGrammar($family);
+
+    $lighting = aliasedEnum(
+        (string) ($cinematicIn['lighting'] ?? $lightingIn['type'] ?? $params['lighting'] ?? ''),
+        FRAMEFLUX_LIGHTING_ALIASES,
+        FRAMEFLUX_LIGHTING,
+        (string) ($inferred['lightingStyle'] ?? 'practical')
+    );
+    $lighting = coerceToList($lighting, $grammar['lightingStyles'] ?? FRAMEFLUX_LIGHTING, (string) ($inferred['lightingStyle'] ?? 'practical'));
+    $camera = enumValue(
+        (string) ($cinematicIn['camera'] ?? ''),
+        FRAMEFLUX_CAMERA,
+        'wide'
     );
 
     $emotionalCore = enumValue(
@@ -952,21 +1309,36 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         FRAMEFLUX_NARRATIVES,
         $inferred['narrativeCore']
     );
-    $visualMetaphor = enumValue(
+    $visualMetaphor = aliasedEnum(
         (string) ($semanticIn['visualMetaphor'] ?? $params['visualMetaphor'] ?? ''),
+        FRAMEFLUX_METAPHOR_ALIASES,
         FRAMEFLUX_METAPHORS,
         $inferred['visualMetaphor']
     );
-    $narrativeAnchor = enumValue(
+    if (!isTechFamily($family) && in_array($visualMetaphor, ['orbital-system', 'signal'], true)) {
+        $visualMetaphor = $inferred['visualMetaphor'];
+        $warnings[] = 'tech metaphor coerced';
+    }
+    $narrativeAnchor = aliasedEnum(
         (string) ($semanticIn['narrativeAnchor'] ?? $params['narrativeAnchor'] ?? $visualMetaphor),
+        FRAMEFLUX_METAPHOR_ALIASES,
         FRAMEFLUX_METAPHORS,
         $visualMetaphor
     );
+    if (!isTechFamily($family) && in_array($narrativeAnchor, ['orbital-system', 'signal'], true)) {
+        $narrativeAnchor = $visualMetaphor;
+    }
     $material = enumValue(
         (string) ($semanticIn['material'] ?? $params['material'] ?? ''),
         FRAMEFLUX_MATERIALS,
         $inferred['material']
     );
+    $lightHuman = in_array($family, ['comedy', 'romance', 'contemporary', 'coming-of-age', 'family', 'animation', 'musical'], true);
+    if ($lightHuman && !in_array($material, $grammar['materials'] ?? FRAMEFLUX_MATERIALS, true)
+        && in_array($material, ['metal', 'plastic', 'concrete'], true)) {
+        $material = $inferred['material'];
+        $warnings[] = 'tech material coerced';
+    }
     $texture = enumValue(
         (string) ($semanticIn['texture'] ?? $params['texture'] ?? ''),
         FRAMEFLUX_TEXTURES,
@@ -977,16 +1349,72 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         FRAMEFLUX_SPATIAL,
         $inferred['spatial']
     );
-    $particleSemantics = enumValue(
+    $particleSemantics = aliasedEnum(
         (string) ($semanticIn['particleSemantics'] ?? $params['particleSemantics'] ?? $proceduralIn['particleSemantics'] ?? ''),
+        FRAMEFLUX_PARTICLE_ALIASES,
         FRAMEFLUX_PARTICLE_SEMANTICS,
         $inferred['particleSemantics']
     );
-    $lineSemantics = enumValue(
+    $lineSemantics = aliasedEnum(
         (string) ($semanticIn['lineSemantics'] ?? $params['lineSemantics'] ?? $proceduralIn['lineSemantics'] ?? ''),
+        FRAMEFLUX_LINE_ALIASES,
         FRAMEFLUX_LINE_SEMANTICS,
         $inferred['lineSemantics']
     );
+    if (!isTechFamily($family) && in_array($lineSemantics, FRAMEFLUX_TECH_LINES, true)) {
+        $lineSemantics = $inferred['lineSemantics'];
+        $warnings[] = 'tech line language coerced';
+    }
+
+    $compositionGrammar = enumValue(
+        (string) ($compositionIn['grammar'] ?? $params['compositionGrammar'] ?? $inferred['compositionGrammar'] ?? ''),
+        COMPOSITION_GRAMMARS,
+        $inferred['compositionGrammar'] ?? 'central'
+    );
+    $proceduralFamily = enumValue(
+        (string) ($proceduralIn['family'] ?? $params['proceduralFamily'] ?? $inferred['proceduralFamily'] ?? ''),
+        PROCEDURAL_FAMILIES,
+        $inferred['proceduralFamily'] ?? 'organic'
+    );
+    $proceduralSecondaryFamily = enumValue(
+        (string) ($proceduralIn['secondaryFamily'] ?? $params['proceduralSecondaryFamily'] ?? $inferred['proceduralSecondaryFamily'] ?? ''),
+        PROCEDURAL_FAMILIES,
+        $inferred['proceduralSecondaryFamily'] ?? 'tactile'
+    );
+    $proceduralAccent = enumValue(
+        (string) ($proceduralIn['accent'] ?? $params['proceduralAccent'] ?? $inferred['proceduralAccent'] ?? ''),
+        PROCEDURAL_FAMILIES,
+        $inferred['proceduralAccent'] ?? 'particle'
+    );
+    $humanElements = enumValue(
+        (string) ($semanticIn['humanElements'] ?? $params['humanElements'] ?? $inferred['humanElements'] ?? ''),
+        FRAMEFLUX_HUMAN_ELEMENTS,
+        $inferred['humanElements'] ?? 'none'
+    );
+    $groundTone = enumValue(
+        (string) ($semanticIn['groundTone'] ?? $params['groundTone'] ?? $inferred['groundTone'] ?? 'mid'),
+        ['light', 'mid', 'dark'],
+        $inferred['groundTone'] ?? 'mid'
+    );
+    $narrativeEnergy = round(clamp((float) ($semanticIn['narrativeEnergy'] ?? $params['narrativeEnergy'] ?? $inferred['narrativeEnergy'] ?? 0.5), 0.05, 0.98), 2);
+
+    if (!isTechFamily($family) && in_array($primary, FRAMEFLUX_TECH_PATTERNS, true)) {
+        $primary = coerceToList('flow', $grammar['patterns'] ?? FRAMEFLUX_PATTERNS, 'flow');
+        $warnings[] = 'tech pattern coerced';
+    }
+    if (!isTechFamily($family) && in_array($secondary, FRAMEFLUX_TECH_PATTERNS, true)) {
+        $secondary = 'particles';
+    }
+    if ($secondary === $primary) {
+        $secondary = nextPattern($primary);
+        if ($secondary === $primary || (!isTechFamily($family) && in_array($secondary, FRAMEFLUX_TECH_PATTERNS, true))) {
+            $secondary = $primary === 'flow' ? 'particles' : 'flow';
+        }
+    }
+    if ($layout === 'frame-inset' && !isTechFamily($family)) {
+        $layout = layoutForComposition($compositionGrammar, abs(crc32($title)));
+        $warnings[] = 'frame-inset reserved for tech families';
+    }
 
     $focalX = clamp((float) ($compositionIn['focalX'] ?? $anchorsIn['focalX'] ?? $params['focalX'] ?? 0.5), 0.15, 0.85);
     $focalY = clamp((float) ($compositionIn['focalY'] ?? $anchorsIn['focalY'] ?? $params['focalY'] ?? 0.42), 0.15, 0.85);
@@ -1002,6 +1430,31 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
 
     $highlight = sanitizeHex((string) ($paletteIn['highlight'] ?? $paletteIn['accent'] ?? ''), '#e8c36a');
     $neutral = sanitizeHex((string) ($paletteIn['neutral'] ?? $paletteIn['text'] ?? ''), '#f5f0e6');
+    $background = sanitizeHex((string) ($paletteIn['background'] ?? ''), '#111111');
+    $primaryColor = sanitizeHex((string) ($paletteIn['primary'] ?? ''), '#884422');
+    $secondaryColor = sanitizeHex((string) ($paletteIn['secondary'] ?? ''), '#336688');
+    $accentColor = sanitizeHex((string) ($paletteIn['accent'] ?? ''), '#e8c36a');
+    $textColor = sanitizeHex((string) ($paletteIn['text'] ?? ''), '#f5f0e6');
+
+    $suppliedBg = sanitizeHex((string) ($paletteIn['background'] ?? ''), '');
+    if ($suppliedBg !== '') {
+        $lum = hexLuminance($suppliedBg);
+        if (($groundTone === 'light' && $lum < 0.38) || ($groundTone === 'dark' && $lum > 0.55)) {
+            $preset = paletteFromGrammar($grammar, abs(crc32($title . '|' . $family)));
+            $background = $preset['bg'];
+            $primaryColor = $preset['acc'];
+            $secondaryColor = $preset['mute'];
+            $accentColor = $preset['acc'];
+            $textColor = $preset['ink'];
+            $highlight = $preset['hi'];
+            $neutral = $preset['ink'];
+            $warnings[] = 'palette coerced to genre ground';
+        }
+    }
+
+    if ($groundTone === 'light') {
+        $shadowDensity = min($shadowDensity, 0.42);
+    }
 
     $inferredType = inferTypographyDirection(
         [
@@ -1010,6 +1463,7 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
             'material' => $material,
             'texture' => $texture,
             'spatial' => $spatial,
+            'grammarFamily' => $family,
         ],
         $genre,
         abs(crc32($title . '|' . $genre . '|type'))
@@ -1060,7 +1514,7 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
     ];
 
     return [
-        'schemaVersion' => '1.1',
+        'schemaVersion' => '1.2',
         'concept' => [
             'title' => $title,
             'genre' => $genre,
@@ -1078,6 +1532,10 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
             'spatial' => $spatial,
             'particleSemantics' => $particleSemantics,
             'lineSemantics' => $lineSemantics,
+            'grammarFamily' => $family,
+            'narrativeEnergy' => $narrativeEnergy,
+            'humanElements' => $humanElements,
+            'groundTone' => $groundTone,
         ],
         'cinematic' => [
             'subject' => clipText((string) ($cinematicIn['subject'] ?? str_replace('-', ' ', $narrativeAnchor)), 80, str_replace('-', ' ', $narrativeAnchor)),
@@ -1089,16 +1547,17 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
             'intensity' => $intensity,
         ],
         'palette' => [
-            'background' => sanitizeHex((string) ($paletteIn['background'] ?? ''), '#111111'),
-            'primary' => sanitizeHex((string) ($paletteIn['primary'] ?? ''), '#884422'),
-            'secondary' => sanitizeHex((string) ($paletteIn['secondary'] ?? ''), '#336688'),
-            'accent' => sanitizeHex((string) ($paletteIn['accent'] ?? ''), '#e8c36a'),
-            'text' => sanitizeHex((string) ($paletteIn['text'] ?? ''), '#f5f0e6'),
+            'background' => $background,
+            'primary' => $primaryColor,
+            'secondary' => $secondaryColor,
+            'accent' => $accentColor,
+            'text' => $textColor,
             'highlight' => $highlight,
             'neutral' => $neutral,
         ],
         'composition' => [
             'layout' => $layout,
+            'grammar' => $compositionGrammar,
             'focalX' => $focalX,
             'focalY' => $focalY,
             'anchorScale' => $anchorScale,
@@ -1106,6 +1565,9 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         'procedural' => [
             'primaryPattern' => $primary,
             'secondaryPattern' => $secondary,
+            'family' => $proceduralFamily,
+            'secondaryFamily' => $proceduralSecondaryFamily,
+            'accent' => $proceduralAccent,
             'density' => $density,
             'intensity' => $intensity,
             'contrast' => $contrast,
@@ -1184,15 +1646,21 @@ function dnaShapePrompt(): string
     "legibility": "scrim" | "shadow" | "plate" | "none",
     "placement": "below-title" | "bottom-anchored" | "focal-adjacent"
   },
-  "emotionalCore": "paranoia" | "wonder" | "grief" | "isolation" | "urgency" | "nostalgia" | "dread" | "intimacy" | "triumph" | "unease" | "longing",
+  "emotionalCore": "paranoia" | "wonder" | "grief" | "isolation" | "urgency" | "nostalgia" | "dread" | "intimacy" | "triumph" | "unease" | "longing" | "playfulness" | "hope",
   "narrativeCore": "escape" | "investigation" | "forbidden-love" | "survival" | "identity" | "betrayal" | "discovery" | "control" | "family" | "transformation" | "obsession" | "memory",
-  "visualMetaphor": "fractured-glass" | "eclipse" | "locked-mechanism" | "decaying-photograph" | "tangled-roots" | "maze" | "burning-document" | "distorted-reflection" | "clock-mechanism" | "biological-cell" | "architectural-ruin" | "orbital-system" | "keyhole" | "map-fold" | "signal" | "silhouette-threshold",
+  "visualMetaphor": "fractured-glass" | "eclipse" | "locked-mechanism" | "decaying-photograph" | "tangled-roots" | "maze" | "burning-document" | "distorted-reflection" | "clock-mechanism" | "biological-cell" | "architectural-ruin" | "orbital-system" | "keyhole" | "map-fold" | "signal" | "silhouette-threshold" | "chaotic-key" | "chandelier-cluster" | "tangled-cords" | "coastal-compass" | "handwritten-letter" | "weathered-door" | "correspondence-clock" | "railway-route" | "paired-objects" | "postcard" | "compass-rose",
   "narrativeAnchor": "same controlled set as visualMetaphor — the dominant object the poster is about",
-  "material": "glass" | "metal" | "paper" | "concrete" | "fabric" | "film-stock" | "smoke" | "water" | "dust" | "wood" | "rust" | "ink" | "stone" | "plastic",
+  "material": "glass" | "metal" | "paper" | "concrete" | "fabric" | "film-stock" | "smoke" | "water" | "dust" | "wood" | "rust" | "ink" | "stone" | "plastic" | "foil" | "cardstock" | "linen" | "leather" | "brass",
   "texture": "distressed" | "smooth" | "grainy" | "scratched" | "weathered" | "glossy" | "dusty" | "corroded" | "fibrous" | "translucent" | "photographic",
   "spatial": "compressed" | "fragmented" | "expanding" | "collapsing" | "spiralling" | "rising" | "drifting" | "converging" | "isolated" | "claustrophobic" | "expansive",
-  "particleSemantics": "dust" | "ash" | "stars" | "rain" | "sparks" | "pollen" | "debris" | "grain",
-  "lineSemantics": "cracks" | "roots" | "wiring" | "threads" | "veins" | "roads" | "circuitry" | "plans",
+  "particleSemantics": "dust" | "ash" | "stars" | "rain" | "sparks" | "pollen" | "debris" | "grain" | "confetti" | "salt" | "sand" | "ember",
+  "lineSemantics": "cracks" | "roots" | "wiring" | "threads" | "veins" | "roads" | "circuitry" | "plans" | "cords" | "ribbons" | "waves" | "coastline" | "handwriting" | "horizon" | "contour" | "trails" | "railway",
+  "grammarFamily": "comedy" | "romance" | "adventure" | "contemporary" | "drama" | "thriller" | "scifi" | "horror" | "fantasy" | "mystery" | "historical" | "coming-of-age" | "documentary" | "musical" | "animation" | "family",
+  "narrativeEnergy": number 0.1-0.95,
+  "compositionGrammar": "asymmetric" | "central" | "editorial" | "diagonal" | "layered" | "expansive" | "minimal" | "crowded" | "organic",
+  "proceduralFamily": "organic" | "geometric" | "tactile" | "chaotic" | "atmospheric" | "editorial" | "topographic" | "material" | "linear" | "particle",
+  "humanElements": "none" | "silhouette" | "hands" | "letter" | "tickets" | "cups" | "paired-objects" | "signage" | "map",
+  "groundTone": "light" | "mid" | "dark",
   "lightDirection": number 0-1,
   "shadowDensity": number 0.2-0.95,
   "anchorScale": number 0.4-1.1,
@@ -1200,7 +1668,7 @@ function dnaShapePrompt(): string
   "cinematic": {
     "subject": "who or what occupies the frame, no readable text",
     "environment": "place and time of day",
-    "lighting": "chiaroscuro" | "neon" | "overcast" | "golden-hour" | "moonlit" | "practical" | "harsh" | "rim" | "backlit",
+    "lighting": "chiaroscuro" | "neon" | "overcast" | "golden-hour" | "moonlit" | "practical" | "harsh" | "rim" | "backlit" | "high-key" | "theatrical" | "coastal-haze" | "bloom" | "hard-sun" | "shaft" | "domestic-warm" | "window-light",
     "atmosphere": "weather / haze / dust",
     "camera": "wide" | "close" | "aerial" | "dutch" | "tracking" | "static",
     "tension": number 0-1,
@@ -1215,33 +1683,39 @@ SHAPE;
 function dnaRulesPrompt(): string
 {
     return <<<'RULES'
-You are translating a SPECIFIC film concept into Visual DNA. Prefer story cues from the title and pitch over genre stereotypes.
-Avoid generic mappings like horror=red/black or sci-fi=neon blue unless the story itself demands them.
+You are translating a SPECIFIC film concept into Visual DNA. Story first, then emotion, then genre grammar, then metaphor, then material / colour / light / type.
+
+BAN THE GENERIC CYBER DEFAULT. Circuit traces, neon grids, blue/purple tech glow, and dark geometric voids are ONLY for cyber thrillers, hacker dramas, AI stories, dystopian sci-fi, and technological horror. Comedy, romance, adventure, contemporary, drama, and family stories must live in a physical material world.
 
 LESS BUT BETTER:
-- Choose ONE dominant visualMetaphor / narrativeAnchor.
-- Choose ONE primary material.
+- Choose ONE dominant visualMetaphor / narrativeAnchor that contains the emotional conflict.
+- Choose ONE primary material that the whole poster inhabits.
 - secondaryPattern must support the metaphor, not compete with it.
-- density should usually stay moderate (0.35–0.7). Busy decoration is a failure.
+- density follows narrativeEnergy (contemplative ~0.25, chaotic ~0.75).
 
-Metaphor meanings (these become the poster's narrative anchor object):
+Metaphor meanings:
+- chaotic-key / tangled-cords / chandelier-cluster = comic luxury, access, excess
+- coastal-compass / handwritten-letter / weathered-door = memory, distance, coastal intimacy
+- correspondence-clock / railway-route / postcard / paired-objects = time, travel, human connection
+- compass-rose / map-fold = exploration, borders
 - fractured-glass = identity, violence, fragile truth
 - eclipse = omen, concealment, cosmic scale
 - locked-mechanism / keyhole = secrets, heists, denied access
 - decaying-photograph = memory, archive, grief
 - tangled-roots = family, origin, entanglement
-- maze = confusion, bureaucracy, being lost
-- burning-document = erased evidence, danger
+- maze = confusion, bureaucracy
+- burning-document = erased evidence
 - distorted-reflection = doubles, impostors
-- clock-mechanism = time pressure
-- biological-cell = body, contagion, mutation
+- clock-mechanism = time pressure (mechanical, not correspondence)
+- biological-cell = body, contagion
 - architectural-ruin = collapse of systems/places
-- orbital-system = systems, surveillance, space
-- map-fold = cities, borders, cartography
-- signal = messages, frequencies, contact
+- orbital-system = systems, surveillance, space (sci-fi only unless the story is cosmic)
+- signal = frequencies, contact (tech stories)
 - silhouette-threshold = arrival, departure, liminal figures
 
-particleSemantics and lineSemantics must match the metaphor (ash for fire, cracks for glass, roads for maps, etc).
+Colour must communicate emotion, not decoration. Light-ground genres (comedy, romance, contemporary) use cream / paper / coastal grounds — do not automatically darken them.
+Lighting is emotional: high-key for comedy, coastal-haze for romance, chiaroscuro for adventure, domestic-warm for contemporary.
+particleSemantics and lineSemantics must match the metaphor (confetti/cords for comedy, salt/waves for coast, railway/handwriting for letters).
 Invent a short original quote. Do not copy the pitch. Max 12 words.
 Cinematic subject describes the still, never poster type.
 
@@ -1251,7 +1725,7 @@ TYPOGRAPHY IS ART DIRECTION, NOT A TEMPLATE:
 - titleTypographyDirection must be derived from the story: weight from how loud it is, case from its
   emotional register, letterforms from the material language, tracking from how much air the space has,
   structure from material behaviour (glass wants outline, corroded metal wants textured, smoke wants gradient,
-  fragmented space wants fragmented type).
+  fragmented space wants fragmented type). Comedy may tilt and split; romance stays literary; contemporary is editorial.
 - titleTypographyDirection.placement must sit in the composition's negative space, away from the focal mass.
 - quoteTypographyDirection must CONTRAST with the title face, never repeat it smaller. A serif display title
   pairs with a sans or mono quote; a sans title pairs with an editorial serif quote.
@@ -1278,8 +1752,12 @@ function assessDnaQuality(array $dna): array
     if (($semantic['visualMetaphor'] ?? '') === ($semantic['narrativeAnchor'] ?? '') && ($semantic['visualMetaphor'] ?? '') === 'silhouette-threshold') {
         $notes[] = 'anchor-generic';
     }
-    if (($proc['primaryPattern'] ?? '') === ($proc['secondaryPattern'] ?? '')) {
-        $notes[] = 'pattern-collision';
+    if (!isTechFamily((string) ($semantic['grammarFamily'] ?? '')) && in_array($proc['primaryPattern'] ?? '', ['grid', 'mesh'], true)) {
+        $notes[] = 'tech-pattern-on-human-genre';
+    }
+    $bg = (string) (($dna['palette']['background'] ?? ''));
+    if (($semantic['groundTone'] ?? '') === 'light' && $bg !== '' && hexLuminance($bg) < 0.35) {
+        $notes[] = 'light-genre-dark-ground';
     }
 
     $typography = is_array($dna['typography'] ?? null) ? $dna['typography'] : [];

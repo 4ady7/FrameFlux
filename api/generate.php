@@ -106,6 +106,8 @@ function requestVisualDna(
 ): ?array {
     $shape = dnaShapePrompt();
     $rules = dnaRulesPrompt();
+    $family = inferGenreFamily($genre, $title . ' ' . $pitch);
+    $brief = grammarDirectorBrief($family);
 
     if ($mode === 'improve' && $previous !== null) {
         $prevJson = json_encode($previous, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -115,8 +117,10 @@ You are refining an existing FrameFlux Visual DNA. Return JSON only with this ex
 
 {$rules}
 
-Keep the same film identity, visualMetaphor, narrativeAnchor, and material.
+Keep the same film identity, visualMetaphor, narrativeAnchor, material, and grammarFamily.
 Strengthen spatial emphasis, lighting, cinematic staging, and quote — not a new concept.
+Stay inside this visual grammar:
+{$brief}
 Do not return an identical copy. Variation seed: {$variation}.
 
 Film title: {$title}
@@ -136,7 +140,9 @@ You reinterpret the same film as a new cinematic direction. Return JSON only wit
 
 {$rules}
 
-Same title, genre, and pitch. Choose a new visualMetaphor / narrativeAnchor and material while staying true to the story.
+Same title, genre, and pitch. Choose a new visualMetaphor / narrativeAnchor and material from the same grammar family while staying true to the story.
+Stay inside this visual grammar:
+{$brief}
 New mood, lighting, camera, palette, layout, and patterns.
 It must feel like a different creative campaign take, not a seed change. Variation seed: {$variation}.
 
@@ -157,6 +163,8 @@ You are the FrameFlux art director. Convert a film concept into Visual DNA. Retu
 {$rules}
 
 This is a new design pass (variation {$variation}). Derive emotionalCore, narrativeCore, visualMetaphor, material, and lighting from the story first, then invent palette, pattern pair, layout, and quote that serve that metaphor.
+
+{$brief}
 
 Film title: {$title}
 Genre: {$genre}

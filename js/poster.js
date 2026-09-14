@@ -407,6 +407,25 @@ function dnaLight(dna) {
   return dna.lighting || {};
 }
 
+function grammarFamily(dna) {
+  return dnaSemantic(dna).grammarFamily || "drama";
+}
+
+function isTechFamily(family) {
+  return family === "thriller" || family === "scifi" || family === "horror";
+}
+
+function isLightGround(dna) {
+  const tone = dnaSemantic(dna).groundTone;
+  if (tone === "light") {
+    return true;
+  }
+  if (tone === "dark") {
+    return false;
+  }
+  return relativeLuminance(hexToRgb(dnaPalette(dna).background || "#111111")) > 0.42;
+}
+
 function inRect(px, py, rect) {
   return px >= rect.x && px <= rect.x + rect.w && py >= rect.y && py <= rect.y + rect.h;
 }
@@ -465,39 +484,92 @@ function drawContrastBackdrop(p, centerY, blockHeight, contrast) {
 function drawMaterialGrain(p, dna, seed, intensity) {
   const material = dnaSemantic(dna).material || "paper";
   const texture = dnaSemantic(dna).texture || "grainy";
+  const pal = dnaPalette(dna);
+  const ink = hexToRgb(pal.text || pal.ink || "#1a1410");
+  const bg = hexToRgb(pal.background);
   p.randomSeed(seed + 401);
   p.noiseSeed(seed + 401);
-  const count =
-    material === "concrete" || material === "dust" || texture === "grainy"
-      ? 2800
-      : material === "film-stock" || texture === "photographic"
-        ? 2200
-        : material === "glass" || material === "plastic"
-          ? 900
-          : 1600;
-  const alphaBase = 8 + intensity * 14;
+
+  const papery = ["paper", "cardstock", "linen", "fabric", "ink"].includes(material);
+  const hide = ["leather", "wood"].includes(material);
+  const metallic = ["metal", "brass", "foil", "rust"].includes(material);
+  const glassy = ["glass", "plastic"].includes(material);
+
+  const count = papery ? 3400 : hide ? 2200 : metallic ? 1600 : glassy ? 900 : 1800;
+  const alphaBase = 8 + intensity * 16;
   for (let i = 0; i < count; i += 1) {
     const x = p.random(POSTER_W);
     const y = p.random(POSTER_H);
-    const n = p.noise(x * 0.02, y * 0.02);
-    let a = alphaBase * (0.4 + n);
+    const n = p.noise(x * 0.018, y * 0.018);
+    let a = alphaBase * (0.35 + n);
     let w = 1.1;
     let h = 1.1;
-    if (material === "metal" || texture === "scratched") {
-      w = p.random(2, 9);
+    if (metallic || texture === "scratched") {
+      w = p.random(2, 11);
       h = 0.7;
       a *= 0.7;
-    } else if (material === "fabric" || texture === "fibrous") {
-      w = 0.8;
-      h = p.random(2, 7);
+    } else if (papery || texture === "fibrous") {
+      w = 0.7 + n;
+      h = p.random(2, 9);
+      a *= papery ? 1.15 : 1;
     } else if (material === "smoke" || material === "water") {
       a *= 0.45;
       w = p.random(1.5, 4);
       h = w;
+    } else if (hide) {
+      w = p.random(1.2, 3.2);
+      h = p.random(0.8, 2.4);
     }
     p.noStroke();
-    p.fill(255, 255, 255, a);
+    const speck = isLightGround(dna) ? ink : [255, 255, 255];
+    p.fill(speck[0], speck[1], speck[2], a);
     p.rect(x, y, w, h);
+  }
+
+  if (papery) {
+    p.noStroke();
+    for (let i = 0; i < 7; i += 1) {
+      const cx = p.random(POSTER_W);
+      const cy = p.random(POSTER_H);
+      p.fill(...ink, 8 + intensity * 10);
+      p.ellipse(cx, cy, p.random(40, 120), p.random(18, 48));
+    }
+    // Edge wear
+    p.stroke(...ink, 18);
+    p.strokeWeight(6);
+    p.noFill();
+    p.rect(8, 8, POSTER_W - 16, POSTER_H - 16);
+  }
+
+  if (material === "leather" || material === "wood") {
+    p.noFill();
+    p.stroke(...ink, 22);
+    p.strokeWeight(1.1);
+    for (let i = 0; i < 9; i += 1) {
+      let x = p.random(POSTER_W);
+      let y = p.random(POSTER_H);
+      p.beginShape();
+      for (let s = 0; s < 18; s += 1) {
+        p.vertex(x, y);
+        x += (p.noise(i, s * 0.2) - 0.5) * 14;
+        y += 6;
+      }
+      p.endShape();
+    }
+  }
+
+  if (material === "brass" || material === "foil") {
+    p.noStroke();
+    for (let i = 0; i < 14; i += 1) {
+      p.fill(...hexToRgb(pal.highlight || pal.accent), 16);
+      p.ellipse(p.random(POSTER_W), p.random(POSTER_H), p.random(12, 40), p.random(4, 14));
+    }
+  }
+
+  if (glassy) {
+    p.noStroke();
+    p.fill(255, 255, 255, 12);
+    p.quad(POSTER_W * 0.1, 0, POSTER_W * 0.22, 0, POSTER_W * 0.08, POSTER_H, 0, POSTER_H);
   }
 }
 
@@ -513,16 +585,23 @@ function drawDirectionalLight(p, dna, seed, fx, fy) {
 
   let glow = secondary;
   let glowAlpha = 0.42;
+  const lightGround = isLightGround(dna);
   if (lighting === "neon") {
     glow = accent;
     glowAlpha = 0.58;
-  } else if (lighting === "golden-hour") {
+  } else if (lighting === "golden-hour" || lighting === "coastal-haze" || lighting === "bloom") {
     glow = highlight;
-    glowAlpha = 0.5;
+    glowAlpha = lightGround ? 0.38 : 0.5;
+  } else if (lighting === "high-key" || lighting === "theatrical") {
+    glow = highlight;
+    glowAlpha = 0.55;
+  } else if (lighting === "domestic-warm" || lighting === "window-light") {
+    glow = highlight;
+    glowAlpha = 0.4;
   } else if (lighting === "moonlit" || lighting === "backlit") {
     glow = secondary;
     glowAlpha = 0.48;
-  } else if (lighting === "harsh") {
+  } else if (lighting === "harsh" || lighting === "hard-sun" || lighting === "shaft") {
     glow = highlight;
     glowAlpha = 0.35;
   } else if (lighting === "rim") {
@@ -544,7 +623,21 @@ function drawDirectionalLight(p, dna, seed, fx, fy) {
   p.drawingContext.fillStyle = key;
   p.drawingContext.fillRect(0, 0, POSTER_W, POSTER_H);
 
-  // Shadow falloff opposite the light.
+  if (lighting === "coastal-haze" || lighting === "bloom") {
+    const haze = p.drawingContext.createLinearGradient(0, 0, 0, POSTER_H);
+    haze.addColorStop(0, `rgba(${highlight[0]},${highlight[1]},${highlight[2]},0.18)`);
+    haze.addColorStop(0.55, "rgba(255,255,255,0)");
+    haze.addColorStop(1, `rgba(${secondary[0]},${secondary[1]},${secondary[2]},0.12)`);
+    p.drawingContext.fillStyle = haze;
+    p.drawingContext.fillRect(0, 0, POSTER_W, POSTER_H);
+  }
+
+  if (lighting === "high-key") {
+    p.drawingContext.fillStyle = "rgba(255,255,255,0.12)";
+    p.drawingContext.fillRect(0, 0, POSTER_W, POSTER_H);
+  }
+
+  const shadeStrength = lightGround || lighting === "high-key" ? 0.08 + shadow * 0.12 : 0.25 + shadow * 0.45;
   const shade = p.drawingContext.createRadialGradient(
     nx(1 - origin.x),
     ny(Math.min(0.95, fy + 0.28)),
@@ -553,7 +646,7 @@ function drawDirectionalLight(p, dna, seed, fx, fy) {
     ny(fy),
     POSTER_H * 0.75
   );
-  shade.addColorStop(0, `rgba(0,0,0,${0.25 + shadow * 0.45})`);
+  shade.addColorStop(0, `rgba(0,0,0,${shadeStrength})`);
   shade.addColorStop(1, "rgba(0,0,0,0)");
   p.drawingContext.fillStyle = shade;
   p.drawingContext.fillRect(0, 0, POSTER_W, POSTER_H);
@@ -583,12 +676,12 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
 
   // Soft contact shadow under the anchor.
   p.noStroke();
-  p.fill(0, 0, 0, 70 + emphasis * 40);
+  p.fill(0, 0, 0, isLightGround(dna) ? 28 + emphasis * 18 : 70 + emphasis * 40);
   p.ellipse(12, POSTER_H * 0.12 * scale, POSTER_W * 0.28 * scale, POSTER_H * 0.04 * scale);
 
-  const metalish = material === "metal" || material === "rust" || material === "plastic";
+  const metalish = material === "metal" || material === "rust" || material === "plastic" || material === "brass" || material === "foil";
   const glassy = material === "glass" || material === "water" || material === "plastic";
-  const papery = material === "paper" || material === "ink" || material === "film-stock";
+  const papery = material === "paper" || material === "ink" || material === "film-stock" || material === "cardstock" || material === "linen";
 
   if (metaphor === "fractured-glass" || metaphor === "distorted-reflection") {
     // Dominant cracked pane — one clear glass object, not decorative sparkle.
@@ -651,6 +744,150 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
       p.fill(...accent, 160);
       p.noStroke();
       p.circle(ox, oy, 6);
+    }
+  } else if (metaphor === "chaotic-key" || metaphor === "tangled-cords" || metaphor === "chandelier-cluster") {
+    p.rotate(-0.22);
+    p.rectMode(p.CENTER);
+    p.noStroke();
+    p.fill(...primary, 210);
+    p.circle(-POSTER_W * 0.16 * scale, 0, POSTER_W * 0.2 * scale);
+    p.fill(...bg, 230);
+    p.circle(-POSTER_W * 0.16 * scale, 0, POSTER_W * 0.1 * scale);
+    p.fill(...accent, 200);
+    p.rect(POSTER_W * 0.06 * scale, 0, POSTER_W * 0.42 * scale, POSTER_H * 0.045 * scale, 4);
+    for (let i = 0; i < 5; i += 1) {
+      const tx = POSTER_W * (0.18 + i * 0.04) * scale;
+      p.fill(...secondary, 200);
+      p.rect(tx, POSTER_H * (i % 2 === 0 ? 0.04 : -0.05) * scale, POSTER_W * 0.035 * scale, POSTER_H * (0.08 + (i % 3) * 0.03) * scale, 2);
+    }
+    p.noFill();
+    p.stroke(...accent, 160);
+    p.strokeWeight(2.2);
+    p.circle(-POSTER_W * 0.16 * scale, 0, POSTER_W * 0.22 * scale);
+    p.strokeWeight(2.4);
+    for (let i = 0; i < 10; i += 1) {
+      p.stroke(...(i % 2 ? accent : secondary), 140);
+      p.strokeWeight(1.4 + (i % 3));
+      let x = p.random(-POSTER_W * 0.28, POSTER_W * 0.3) * scale;
+      let y = p.random(-POSTER_H * 0.16, POSTER_H * 0.2) * scale;
+      p.beginShape();
+      for (let s = 0; s < 16; s += 1) {
+        p.vertex(x, y);
+        x += Math.cos(s * 0.5 + i) * 10 * scale;
+        y += Math.sin(s * 0.7 + i * 0.3) * 9 * scale;
+      }
+      p.endShape();
+    }
+    if (metaphor !== "tangled-cords") {
+      p.noStroke();
+      for (let i = 0; i < 8; i += 1) {
+        p.push();
+        p.translate(p.random(-80, 90) * scale, p.random(-70, 80) * scale);
+        p.rotate(p.random(-0.8, 0.8));
+        p.fill(...hexToRgb(pal.highlight || pal.accent), 90);
+        p.quad(-8, 0, 0, -18, 8, 0, 0, 10);
+        p.pop();
+      }
+    }
+  } else if (metaphor === "coastal-compass" || metaphor === "compass-rose") {
+    p.noFill();
+    p.stroke(...primary, 200);
+    p.strokeWeight(4);
+    p.circle(0, 0, POSTER_W * 0.5 * scale);
+    p.strokeWeight(1.6);
+    p.circle(0, 0, POSTER_W * 0.38 * scale);
+    p.stroke(...accent, 160);
+    for (let i = 0; i < 16; i += 1) {
+      const a = (i / 16) * p.TWO_PI;
+      const inner = i % 4 === 0 ? 0.16 : 0.2;
+      p.line(
+        Math.cos(a) * POSTER_W * inner * scale,
+        Math.sin(a) * POSTER_W * inner * scale,
+        Math.cos(a) * POSTER_W * 0.24 * scale,
+        Math.sin(a) * POSTER_W * 0.24 * scale
+      );
+    }
+    p.noStroke();
+    p.fill(...accent, 200);
+    p.triangle(0, -POSTER_H * 0.16 * scale, -12 * scale, 8 * scale, 12 * scale, 8 * scale);
+    p.fill(...secondary, 180);
+    p.triangle(0, POSTER_H * 0.12 * scale, -9 * scale, 0, 9 * scale, 0);
+    p.fill(...hexToRgb(pal.highlight || pal.accent), 55);
+    p.circle(POSTER_W * 0.08 * scale, -POSTER_H * 0.1 * scale, POSTER_W * 0.22 * scale);
+    p.fill(...secondary, 140);
+    p.rectMode(p.CENTER);
+    p.rotate(0.18);
+    p.rect(POSTER_W * 0.16 * scale, POSTER_H * 0.12 * scale, POSTER_W * 0.28 * scale, POSTER_H * 0.16 * scale);
+  } else if (
+    metaphor === "correspondence-clock" ||
+    metaphor === "handwritten-letter" ||
+    metaphor === "postcard" ||
+    metaphor === "railway-route" ||
+    metaphor === "paired-objects" ||
+    metaphor === "weathered-door"
+  ) {
+    p.rectMode(p.CENTER);
+    if (metaphor === "weathered-door") {
+      p.noStroke();
+      p.fill(...primary, 190);
+      p.rect(0, 0, POSTER_W * 0.34 * scale, POSTER_H * 0.58 * scale, 4);
+      p.fill(...bg, 160);
+      p.rect(0, -POSTER_H * 0.04 * scale, POSTER_W * 0.22 * scale, POSTER_H * 0.38 * scale);
+      p.fill(...accent, 200);
+      p.circle(POSTER_W * 0.1 * scale, 0, 14 * scale);
+    } else if (metaphor === "paired-objects") {
+      p.noStroke();
+      p.fill(...secondary, 200);
+      p.ellipse(-POSTER_W * 0.1 * scale, 8, POSTER_W * 0.16 * scale, POSTER_H * 0.08 * scale);
+      p.ellipse(POSTER_W * 0.12 * scale, 4, POSTER_W * 0.16 * scale, POSTER_H * 0.08 * scale);
+      p.fill(...primary, 120);
+      p.rect(-POSTER_W * 0.1 * scale, -20, 8, 36, 3);
+      p.rect(POSTER_W * 0.12 * scale, -24, 8, 36, 3);
+    } else {
+      const sheets = metaphor === "correspondence-clock" ? 7 : 3;
+      for (let i = 0; i < sheets; i += 1) {
+        p.push();
+        p.rotate((i - sheets / 2) * 0.11);
+        p.noStroke();
+        p.fill(0, 0, 0, 30);
+        p.rect(6, 8, POSTER_W * 0.42 * scale, POSTER_H * 0.28 * scale);
+        p.fill(...secondary, 210 - i * 12);
+        p.rect(0, 0, POSTER_W * 0.42 * scale, POSTER_H * 0.28 * scale);
+        p.stroke(...primary, 80);
+        p.strokeWeight(1);
+        p.line(-POSTER_W * 0.16 * scale, -10, POSTER_W * 0.16 * scale, -6);
+        p.line(-POSTER_W * 0.15 * scale, 6, POSTER_W * 0.12 * scale, 10);
+        p.pop();
+      }
+      p.noStroke();
+      p.fill(...accent, 50);
+      p.ellipse(POSTER_W * 0.08 * scale, POSTER_H * 0.08 * scale, 48 * scale, 32 * scale);
+      if (metaphor === "correspondence-clock" || metaphor === "railway-route") {
+        p.noFill();
+        p.stroke(...primary, 180);
+        p.strokeWeight(2.4);
+        p.circle(0, 0, POSTER_W * 0.5 * scale);
+        p.strokeWeight(3);
+        p.line(0, 0, 0, -POSTER_H * 0.14 * scale);
+        p.line(0, 0, POSTER_W * 0.12 * scale, 18 * scale);
+        p.fill(...accent, 200);
+        p.noStroke();
+        p.circle(0, 0, 8);
+        p.noFill();
+        p.stroke(...accent, 90);
+        p.strokeWeight(1.4);
+        for (let i = 0; i < 5; i += 1) {
+          p.beginShape();
+          for (let x = -POSTER_W * 0.4; x < POSTER_W * 0.4; x += 16) {
+            p.vertex(x, Math.sin(x * 0.02 + i) * 18 + i * 14 - 40);
+          }
+          p.endShape();
+        }
+      }
+      if (metaphor === "postcard") {
+        p.stroke(...accent, 140);
+        p.line(0, -POSTER_H * 0.12 * scale, 0, POSTER_H * 0.12 * scale);
+      }
     }
   } else if (metaphor === "locked-mechanism" || metaphor === "clock-mechanism" || metaphor === "keyhole") {
     p.noStroke();
@@ -808,6 +1045,62 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
   p.pop();
 }
 
+function drawHumanTraces(p, dna, seed, fx, fy) {
+  const human = dnaSemantic(dna).humanElements || "none";
+  const family = grammarFamily(dna);
+  if (human === "none" && !["romance", "contemporary", "coming-of-age", "family", "drama"].includes(family)) {
+    return;
+  }
+  const pal = dnaPalette(dna);
+  const primary = hexToRgb(pal.primary);
+  const accent = hexToRgb(pal.accent);
+  const secondary = hexToRgb(pal.secondary);
+  p.randomSeed(seed + 911);
+  p.push();
+  const kind = human === "none" ? "paired-objects" : human;
+  if (kind === "tickets" || kind === "letter" || kind === "paired-objects") {
+    p.rectMode(p.CENTER);
+    p.noStroke();
+    p.fill(...secondary, 180);
+    p.translate(nx(0.18), ny(0.82));
+    p.rotate(-0.2);
+    p.rect(0, 0, 70, 32, 3);
+    p.fill(...accent, 160);
+    p.rect(18, 22, 70, 32, 3);
+  } else if (kind === "cups") {
+    p.noStroke();
+    p.fill(...secondary, 170);
+    p.ellipse(nx(0.2), ny(0.8), 36, 16);
+    p.ellipse(nx(0.3), ny(0.81), 36, 16);
+  } else if (kind === "hands") {
+    p.noFill();
+    p.stroke(...primary, 90);
+    p.strokeWeight(2);
+    p.arc(nx(fx - 0.16), ny(fy + 0.18), 70, 40, 0.2, 2.6);
+    p.arc(nx(fx + 0.16), ny(fy + 0.2), 70, 40, 0.6, 3.1);
+  } else if (kind === "signage") {
+    p.rectMode(p.CENTER);
+    p.noStroke();
+    p.fill(...accent, 200);
+    p.rect(nx(0.82), ny(0.22), 86, 28, 3);
+  }
+  if (kind === "letter" || family === "contemporary" || family === "romance") {
+    p.noFill();
+    p.stroke(...primary, 70);
+    p.strokeWeight(1.1);
+    p.beginShape();
+    let x = nx(0.12);
+    let y = ny(0.72);
+    for (let s = 0; s < 24; s += 1) {
+      p.vertex(x, y);
+      x += 8;
+      y += Math.sin(s * 0.9) * 3;
+    }
+    p.endShape();
+  }
+  p.pop();
+}
+
 function drawCinematicPlate(p, dna, seed, spec) {
   const pal = dnaPalette(dna);
   const semantic = dnaSemantic(dna);
@@ -877,13 +1170,13 @@ function drawCinematicPlate(p, dna, seed, spec) {
   }
 
   drawMaterialGrain(p, dna, seed, materialEmphasis(dna, seed));
+  drawHumanTraces(p, dna, seed, fx, fy);
 
   p.noFill();
   p.stroke(...hexToRgb(pal.accent), 14);
   p.strokeWeight(1);
   p.line(0, ny(horizon), POSTER_W, ny(horizon));
 
-  // Depth vignette — stronger when shadow density is high.
   const shadow = Number(dnaLight(dna).shadowDensity ?? 0.55);
   p.drawingContext.save();
   const vig = p.drawingContext.createRadialGradient(
@@ -895,7 +1188,12 @@ function drawCinematicPlate(p, dna, seed, spec) {
     POSTER_H * (0.68 + shadow * 0.08)
   );
   vig.addColorStop(0, "rgba(0,0,0,0)");
-  vig.addColorStop(1, `rgba(0,0,0,${0.4 + shadow * 0.28})`);
+  if (isLightGround(dna)) {
+    const paper = hexToRgb(pal.background);
+    vig.addColorStop(1, `rgba(${paper[0]},${paper[1]},${paper[2]},${0.18 + shadow * 0.12})`);
+  } else {
+    vig.addColorStop(1, `rgba(0,0,0,${0.4 + shadow * 0.28})`);
+  }
   p.drawingContext.fillStyle = vig;
   p.drawingContext.fillRect(0, 0, POSTER_W, POSTER_H);
   p.drawingContext.restore();
@@ -954,9 +1252,17 @@ function drawFlowField(p, dna, seed, sampler, spec, weight) {
       ? 1.2
       : lineKind === "roots" || lineKind === "veins"
         ? 1.35
-        : lineKind === "plans" || lineKind === "roads"
-          ? 0.95
-          : 1.05;
+        : lineKind === "cords" || lineKind === "ribbons"
+          ? 2.1
+          : lineKind === "waves" || lineKind === "coastline" || lineKind === "horizon"
+            ? 1.5
+            : lineKind === "railway" || lineKind === "trails" || lineKind === "contour"
+              ? 1.25
+              : lineKind === "handwriting"
+                ? 1.05
+                : lineKind === "plans" || lineKind === "roads"
+                  ? 0.95
+                  : 1.05;
   p.strokeWeight(strokeW);
   for (let i = 0; i < count; i += 1) {
     let x = p.random(POSTER_W);
@@ -990,8 +1296,27 @@ function drawFlowField(p, dna, seed, sampler, spec, weight) {
         angle = s % 5 < 3 ? Math.round(angle / p.HALF_PI) * p.HALF_PI : angle;
       } else if (lineKind === "roots" || lineKind === "veins") {
         angle = n * p.TWO_PI * 1.4 + edgeBias;
+      } else if (lineKind === "cords" || lineKind === "ribbons") {
+        angle = n * p.TWO_PI * 3.2 + Math.sin(s * 0.4 + i) * 0.8;
+      } else if (lineKind === "waves" || lineKind === "coastline" || lineKind === "horizon") {
+        angle = 0.15 + Math.sin(x * 0.01 + i) * 0.45 + (n - 0.5) * 0.3;
+      } else if (lineKind === "railway" || lineKind === "trails") {
+        angle = 0.55 + (n - 0.5) * 0.35 + Math.sin(s * 0.12) * 0.08;
+      } else if (lineKind === "handwriting") {
+        angle = n * 4 + Math.sin(s * 1.7) * 1.2;
+      } else if (lineKind === "contour") {
+        angle = Math.sin(y * 0.02 + i) * 0.6 + 0.2;
       }
-      const step = lineKind === "cracks" ? 5.2 : lineKind === "threads" ? 3.6 : 4.4;
+      const step =
+        lineKind === "cracks"
+          ? 5.2
+          : lineKind === "threads" || lineKind === "handwriting"
+            ? 3.4
+            : lineKind === "cords"
+              ? 5.6
+              : lineKind === "waves"
+                ? 6.2
+                : 4.4;
       x += Math.cos(angle) * step;
       y += Math.sin(angle) * step;
       if (x < -20 || x > POSTER_W + 20 || y < -20 || y > POSTER_H + 20) {
@@ -1090,9 +1415,23 @@ function drawParticles(p, dna, seed, sampler, spec, weight) {
       p.rect(nx(u), ny(v), r * weight, r * 0.6 * weight);
       continue;
     }
-    if (kind === "stars") {
-      p.fill(255, 255, 255, alpha * 0.9);
-      p.circle(nx(u), ny(v), p.random(0.8, 2.2) * weight);
+    if (kind === "confetti") {
+      p.push();
+      p.translate(nx(u), ny(v));
+      p.rotate(p.random(p.TWO_PI));
+      p.fill(...hexToRgb(c), alpha);
+      p.rect(0, 0, r * 2.2 * weight, r * 0.7 * weight);
+      p.pop();
+      continue;
+    }
+    if (kind === "salt" || kind === "sand") {
+      p.fill(...hexToRgb(c), alpha * 0.7);
+      p.circle(nx(u), ny(v), p.random(0.6, 1.8) * weight);
+      continue;
+    }
+    if (kind === "ember") {
+      p.fill(...hexToRgb(pal.accent), alpha);
+      p.circle(nx(u), ny(v), r * 0.8 * weight);
       continue;
     }
     p.fill(...hexToRgb(c), alpha);
@@ -1175,6 +1514,11 @@ function drawMesh(p, dna, seed, sampler, spec, weight) {
 }
 
 function drawPattern(p, name, dna, seed, sampler, spec, weight) {
+  const family = grammarFamily(dna);
+  if (!isTechFamily(family) && (name === "grid" || name === "mesh")) {
+    drawFlowField(p, dna, seed, sampler, spec, weight);
+    return;
+  }
   if (name === "grid") {
     drawGrid(p, dna, seed, sampler, spec, weight);
   } else if (name === "particles") {
@@ -1190,9 +1534,17 @@ function drawPattern(p, name, dna, seed, sampler, spec, weight) {
 
 function patternPlan(dna, role) {
   const proc = dnaProc(dna);
-  const primary = proc.primaryPattern || dna.pattern || "flow";
-  const secondary = proc.secondaryPattern || "grid";
-  // Less-but-better: one strong primary; secondary is quiet support.
+  let primary = proc.primaryPattern || dna.pattern || "flow";
+  let secondary = proc.secondaryPattern || "particles";
+  const family = grammarFamily(dna);
+  if (!isTechFamily(family)) {
+    if (primary === "grid" || primary === "mesh") {
+      primary = "flow";
+    }
+    if (secondary === "grid" || secondary === "mesh") {
+      secondary = "particles";
+    }
+  }
   if (role === "hybrid") {
     return [
       { name: primary, weight: 0.78, seedShift: 0 },
@@ -1205,7 +1557,6 @@ function patternPlan(dna, role) {
       { name: primary, weight: 0.18, seedShift: 140 },
     ];
   }
-  // Signature: one strong primary system — keep secondary off so the anchor can own the frame.
   return [{ name: primary, weight: 0.72, seedShift: 0 }];
 }
 

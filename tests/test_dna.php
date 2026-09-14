@@ -55,7 +55,7 @@ $valid = normalizeParams([
     'focalY' => 0.4,
 ], 'Night of the Glass River', 'neo-noir', 'A city after midnight.');
 
-expect($valid['schemaVersion'] === '1.1', 'schemaVersion is 1.1');
+expect($valid['schemaVersion'] === '1.2', 'schemaVersion is 1.2');
 expect($valid['procedural']['primaryPattern'] === 'flow', 'valid primary pattern');
 expect($valid['procedural']['secondaryPattern'] === 'rings', 'valid secondary pattern');
 expect($valid['composition']['layout'] === 'centered', 'valid layout');
@@ -402,6 +402,155 @@ if ($dangling !== []) {
     echo '     ' . implode("\n     ", array_slice($dangling, 0, 4)) . "\n";
 }
 expect($dangling === [], 'taglines never end on a dangling word');
+
+// --- Genre visual grammar (comedy / romance / adventure / contemporary) ---
+
+$rent = normalizeParams(
+    fallbackVisualParams(
+        'Rent-A-Mansion',
+        'Workplace Comedy',
+        'Eccentric tenants compete for a crumbling luxury house they cannot afford.',
+        21,
+        'generate',
+        null
+    ),
+    'Rent-A-Mansion',
+    'Workplace Comedy',
+    'Eccentric tenants compete for a crumbling luxury house they cannot afford.'
+);
+expect($rent['semantic']['grammarFamily'] === 'comedy', 'Rent-A-Mansion is comedy grammar');
+expect($rent['semantic']['groundTone'] === 'light', 'comedy uses a light ground');
+expect(hexLuminance($rent['palette']['background']) > 0.45, 'comedy background is not a dark cyber plate');
+expect(
+    in_array($rent['semantic']['visualMetaphor'], ['chaotic-key', 'chandelier-cluster', 'tangled-cords', 'keyhole'], true),
+    'Rent-A-Mansion uses a comic access metaphor'
+);
+expect(!in_array($rent['procedural']['primaryPattern'], ['grid', 'mesh'], true), 'comedy does not default to tech mesh/grid');
+expect(!in_array($rent['semantic']['lineSemantics'], ['circuitry', 'wiring'], true), 'comedy lines are not circuits');
+expect(in_array($rent['cinematic']['lighting'], ['high-key', 'theatrical', 'practical'], true), 'comedy lighting is high-key/theatrical');
+expect($rent['composition']['layout'] !== 'frame-inset', 'comedy avoids the sterile inset void');
+
+$cape = normalizeParams(
+    fallbackVisualParams(
+        'Summer at Cape Solitude',
+        'Romantic Drama',
+        'Two people spend one last season in a weathered coastal house, writing letters they may never send.',
+        22,
+        'generate',
+        null
+    ),
+    'Summer at Cape Solitude',
+    'Romantic Drama',
+    'Two people spend one last season in a weathered coastal house, writing letters they may never send.'
+);
+expect($cape['semantic']['grammarFamily'] === 'romance', 'Cape Solitude is romance grammar');
+expect($cape['semantic']['groundTone'] === 'light', 'romance uses a light ground');
+expect(hexLuminance($cape['palette']['background']) > 0.45, 'romance background is not a dark tech plate');
+expect(
+    in_array($cape['semantic']['visualMetaphor'], ['coastal-compass', 'handwritten-letter', 'weathered-door', 'silhouette-threshold'], true),
+    'Cape Solitude uses a coastal memory metaphor'
+);
+expect(in_array($cape['semantic']['lineSemantics'], ['waves', 'coastline', 'handwriting', 'horizon'], true), 'romance lines are organic');
+expect(
+    in_array($cape['cinematic']['lighting'], ['coastal-haze', 'golden-hour', 'bloom', 'backlit'], true),
+    'romance lighting is coastal/haze'
+);
+expect(!in_array($cape['procedural']['primaryPattern'], ['grid', 'mesh'], true), 'romance does not use tech grids');
+
+$letters = normalizeParams(
+    fallbackVisualParams(
+        'Letters Between Stations',
+        'Contemporary Romance',
+        'Two commuters keep a correspondence across overlapping train lines and missed connections.',
+        23,
+        'generate',
+        null
+    ),
+    'Letters Between Stations',
+    'Contemporary Romance',
+    'Two commuters keep a correspondence across overlapping train lines and missed connections.'
+);
+expect($letters['semantic']['grammarFamily'] === 'contemporary', 'Letters is contemporary grammar');
+expect($letters['semantic']['groundTone'] === 'light', 'contemporary uses a paper ground');
+expect(hexLuminance($letters['palette']['background']) > 0.45, 'contemporary background is paper, not cyber-black');
+expect(
+    in_array($letters['semantic']['visualMetaphor'], ['correspondence-clock', 'handwritten-letter', 'railway-route', 'postcard', 'paired-objects'], true),
+    'Letters uses a correspondence/time metaphor'
+);
+expect(in_array($letters['semantic']['lineSemantics'], ['railway', 'handwriting', 'horizon', 'threads'], true), 'Letters lines are railway/handwriting');
+expect(
+    in_array($letters['cinematic']['lighting'], ['domestic-warm', 'window-light', 'practical'], true),
+    'contemporary lighting is domestic'
+);
+expect(in_array($letters['semantic']['humanElements'], ['letter', 'tickets', 'cups', 'hands', 'paired-objects'], true), 'contemporary keeps human traces');
+expect($letters['composition']['layout'] !== 'frame-inset', 'contemporary avoids the sterile inset void');
+
+expect(
+    $rent['semantic']['visualMetaphor'] !== $cape['semantic']['visualMetaphor']
+        && $cape['semantic']['visualMetaphor'] !== $letters['semantic']['visualMetaphor'],
+    'the three example films use distinct metaphors'
+);
+expect(
+    $rent['cinematic']['lighting'] !== $cape['cinematic']['lighting']
+        || $cape['cinematic']['lighting'] !== $letters['cinematic']['lighting'],
+    'the three example films use distinct lighting languages'
+);
+
+$scifi = normalizeParams(fallbackVisualParams('Orbital Quiet', 'science fiction', 'A signal from a dead satellite rewrites memory.', 8, 'generate', null), 'Orbital Quiet', 'science fiction', 'A signal from a dead satellite rewrites memory.');
+expect($scifi['semantic']['grammarFamily'] === 'scifi', 'sci-fi keeps the tech family');
+expect(isTechFamily($scifi['semantic']['grammarFamily']), 'sci-fi is a tech family');
+expect(
+    in_array($scifi['procedural']['primaryPattern'], ['grid', 'mesh', 'rings', 'particles', 'flow'], true),
+    'sci-fi may still use geometric language'
+);
+
+$regenA = fallbackVisualParams('Rent-A-Mansion', 'Workplace Comedy', '', 1, 'generate', null);
+$regenB = fallbackVisualParams('Rent-A-Mansion', 'Workplace Comedy', '', 99, 'generate', null);
+$normA = normalizeParams($regenA, 'Rent-A-Mansion', 'Workplace Comedy', '');
+$normB = normalizeParams($regenB, 'Rent-A-Mansion', 'Workplace Comedy', '');
+expect($normA['semantic']['grammarFamily'] === $normB['semantic']['grammarFamily'], 'regeneration preserves comedy grammar');
+expect($normA['semantic']['groundTone'] === $normB['semantic']['groundTone'], 'regeneration preserves ground tone');
+
+$prevRent = whitelistPrevious($rent);
+$improved = normalizeParams(
+    fallbackVisualParams('Rent-A-Mansion', 'Workplace Comedy', 'Eccentric tenants compete.', 44, 'improve', $prevRent),
+    'Rent-A-Mansion',
+    'Workplace Comedy',
+    'Eccentric tenants compete.'
+);
+expect($improved['semantic']['grammarFamily'] === 'comedy', 'improve keeps comedy grammar');
+expect($improved['semantic']['visualMetaphor'] === $rent['semantic']['visualMetaphor'], 'improve keeps the comic metaphor');
+
+$reimagined = normalizeParams(
+    fallbackVisualParams('Rent-A-Mansion', 'Workplace Comedy', 'Eccentric tenants compete.', 55, 'reimagine', $prevRent),
+    'Rent-A-Mansion',
+    'Workplace Comedy',
+    'Eccentric tenants compete.'
+);
+expect($reimagined['semantic']['grammarFamily'] === 'comedy', 'reimagine stays in comedy grammar');
+expect($reimagined['semantic']['groundTone'] === 'light', 'reimagine does not fall back to a dark cyber ground');
+expect(!in_array($reimagined['procedural']['primaryPattern'], ['grid', 'mesh'], true), 'reimagine does not introduce tech grids');
+
+$hostileCyber = normalizeParams([
+    'visualMetaphor' => 'orbital-system',
+    'pattern' => 'mesh',
+    'lineSemantics' => 'circuitry',
+    'palette' => [
+        'background' => '#070b12',
+        'primary' => '#3d8ea8',
+        'secondary' => '#1c3a4a',
+        'accent' => '#7ec8e3',
+        'text' => '#e4eef8',
+    ],
+], 'Rent-A-Mansion', 'Workplace Comedy', 'A farce about keys.');
+expect($hostileCyber['semantic']['visualMetaphor'] !== 'orbital-system', 'comedy rejects a sci-fi metaphor payload');
+expect(!in_array($hostileCyber['procedural']['primaryPattern'], ['mesh', 'grid'], true), 'comedy rejects a mesh payload');
+expect(hexLuminance($hostileCyber['palette']['background']) > 0.38, 'comedy rejects a dark cyber palette payload');
+
+$adv = normalizeParams(fallbackVisualParams('The Ochre Map', 'adventure', 'An expedition across ruined stone and oxidised brass.', 12, 'generate', null), 'The Ochre Map', 'adventure', 'An expedition across ruined stone and oxidised brass.');
+expect($adv['semantic']['grammarFamily'] === 'adventure', 'adventure grammar from genre');
+expect(in_array($adv['semantic']['material'], ['leather', 'brass', 'stone', 'paper', 'wood', 'metal'], true), 'adventure uses rugged materials');
+expect(in_array($adv['cinematic']['lighting'], ['chiaroscuro', 'hard-sun', 'shaft', 'harsh'], true), 'adventure uses dramatic light');
 
 // Quality notes flag a genre-label regression.
 $notes = assessDnaQuality($typeBase);

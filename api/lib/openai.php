@@ -125,6 +125,6 @@ Mood: {$mood}. Genre feeling: {$genre}.
 Lighting: {$lighting}. Atmosphere: {$atmosphere}.
 Colour grade keyed to {$bg}, {$primary}, and a spare accent of {$accent}.
 One dominant subject, restrained detail, physically believable materials, filmic grain.
-Avoid generic neon glow, random particles, and decorative symmetry.
+Avoid generic neon glow, circuit boards, holographic HUDs, and decorative symmetry unless the story is technological.
 PROMPT;
 }
