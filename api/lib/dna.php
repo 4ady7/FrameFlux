@@ -560,6 +560,29 @@ function layoutForSemantic(array $semantic, int $seed): string
 }
 
 /**
+ * Pick the first preferred quote style that does not sit in the same
+ * typographic category as the title, so contrast is guaranteed without
+ * every clash collapsing onto a single fallback face.
+ */
+function pickContrastingQuoteStyle(string $titleCategory, array $preferences, int $seed): string
+{
+    $rotation = FRAMEFLUX_QUOTE_STYLES;
+    $offset = $seed % count($rotation);
+    $rotated = array_merge(array_slice($rotation, $offset), array_slice($rotation, 0, $offset));
+
+    foreach (array_merge($preferences, $rotated) as $style) {
+        if (!in_array($style, FRAMEFLUX_QUOTE_STYLES, true)) {
+            continue;
+        }
+        if ((FRAMEFLUX_QUOTE_STYLE_CATEGORY[$style] ?? 'serif') !== $titleCategory) {
+            return $style;
+        }
+    }
+
+    return 'caption';
+}
+
+/**
  * Derive title and quote typography from the story, not from a genre lookup.
  * Genre still nudges the result, but material / emotion / spatial lead.
  */
@@ -649,27 +672,37 @@ function inferTypographyDirection(array $semantic, string $genre, int $seed): ar
         default => FRAMEFLUX_TITLE_PLACEMENTS[$seed % count(FRAMEFLUX_TITLE_PLACEMENTS)],
     };
 
-    // Quote style follows atmosphere and how the story is "recorded".
-    $quoteStyle = match (true) {
-        $material === 'film-stock' || $texture === 'photographic' => 'cinematic-subtitle',
-        in_array($narrative, ['investigation', 'control', 'betrayal'], true) => 'typewriter',
-        $emotion === 'intimacy' || $letterforms === 'hand-lettered' => 'handwritten',
-        in_array($emotion, ['nostalgia', 'grief', 'longing'], true) => 'editorial-italic',
-        in_array($emotion, ['urgency', 'paranoia'], true) => 'caption',
-        default => 'editorial-italic',
-    };
-
-    // Force the quote face to contrast with the title face.
-    $titleCategory = FRAMEFLUX_LETTERFORM_CATEGORY[$letterforms] ?? 'sans';
-    if ((FRAMEFLUX_QUOTE_STYLE_CATEGORY[$quoteStyle] ?? 'serif') === $titleCategory) {
-        $quoteStyle = match ($titleCategory) {
-            'serif' => 'cinematic-subtitle',
-            'sans' => 'editorial-italic',
-            'script' => 'caption',
-            'mono' => 'editorial-italic',
-            default => 'caption',
-        };
+    // Quote style follows how the story is "recorded", in preference order, so a
+    // clash with the title face falls through to the next meaningful choice.
+    $quotePrefs = [];
+    if ($material === 'film-stock' || $texture === 'photographic') {
+        $quotePrefs[] = 'cinematic-subtitle';
     }
+    if (in_array($narrative, ['investigation', 'control', 'betrayal'], true)) {
+        $quotePrefs[] = 'typewriter';
+    }
+    if ($emotion === 'intimacy' || $letterforms === 'hand-lettered') {
+        $quotePrefs[] = 'handwritten';
+    }
+    if (in_array($emotion, ['nostalgia', 'grief', 'longing'], true)) {
+        $quotePrefs[] = 'editorial-italic';
+    }
+    if (in_array($emotion, ['urgency', 'paranoia', 'dread'], true)) {
+        $quotePrefs[] = 'caption';
+    }
+    // Secondary material cues keep the tail of the list from being uniform.
+    if (in_array($material, ['paper', 'ink'], true)) {
+        $quotePrefs[] = 'typewriter';
+    }
+    if ($material === 'fabric') {
+        $quotePrefs[] = 'handwritten';
+    }
+    if (in_array($emotion, ['wonder', 'triumph'], true)) {
+        $quotePrefs[] = 'cinematic-subtitle';
+    }
+
+    $titleCategory = FRAMEFLUX_LETTERFORM_CATEGORY[$letterforms] ?? 'sans';
+    $quoteStyle = pickContrastingQuoteStyle($titleCategory, $quotePrefs, $seed);
     $pairing = (FRAMEFLUX_QUOTE_STYLE_CATEGORY[$quoteStyle] ?? 'serif') === $titleCategory
         ? 'complement'
         : 'contrast';
@@ -1006,13 +1039,11 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
     // The quote must never simply repeat the title face at a smaller size.
     $titleCategory = FRAMEFLUX_LETTERFORM_CATEGORY[$titleDirection['letterforms']] ?? 'sans';
     if ((FRAMEFLUX_QUOTE_STYLE_CATEGORY[$quoteStyle] ?? 'serif') === $titleCategory) {
-        $quoteStyle = match ($titleCategory) {
-            'serif' => 'cinematic-subtitle',
-            'sans' => 'editorial-italic',
-            'script' => 'caption',
-            'mono' => 'editorial-italic',
-            default => 'caption',
-        };
+        $quoteStyle = pickContrastingQuoteStyle(
+            $titleCategory,
+            [$inferredType['quote']['style']],
+            abs(crc32($title . '|' . $genre . '|quote'))
+        );
         $warnings[] = 'quoteStyle re-paired against title';
     }
 
