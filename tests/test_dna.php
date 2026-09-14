@@ -334,6 +334,48 @@ $typePrev = whitelistPrevious($typeBase);
 expect(isset($typePrev['titleTypographyDirection']['letterforms']), 'whitelist carries title typography');
 expect(isset($typePrev['quoteTypographyDirection']['style']), 'whitelist carries quote typography');
 
+// The genre must never leak into poster copy, including via the tagline.
+$leaks = [];
+$genreProbe = [
+    ['Vault Hour', 'heist thriller', 'A crew cracks a timed vault under the city.'],
+    ['Punchline Weather', 'comedy', 'A failed magician invents a weather machine for one joke.'],
+    ['Orbital Quiet', 'science fiction', 'A signal from a dead satellite rewrites memory.'],
+    ['Root Crown', 'fantasy', 'A forest kingdom wakes when the eclipse arrives.'],
+    ['Glass Nerve', 'psychological horror', 'A surgeon hears voices in cracked windows.'],
+    ['First Summer', 'coming-of-age', 'A teenager finds family roots tangled under an old house.'],
+];
+foreach ($genreProbe as [$t, $g, $pi]) {
+    // Every seed, not just one, since the tagline is chosen by seed.
+    for ($v = 1; $v <= 40; $v++) {
+        $d = normalizeParams(fallbackVisualParams($t, $g, $pi, $v, 'generate', null), $t, $g, $pi);
+        $copy = strtolower($d['concept']['quote'] . ' ' . $d['concept']['title']);
+        if (str_contains($copy, strtolower($g))) {
+            $leaks[] = "{$t}/{$g} seed {$v}: \"{$d['concept']['quote']}\"";
+        }
+    }
+}
+if ($leaks !== []) {
+    echo '     ' . implode("\n     ", array_slice($leaks, 0, 4)) . "\n";
+}
+expect($leaks === [], 'genre never appears in poster copy across seeds');
+
+// Taglines must not end on a dangling article or preposition.
+$dangling = [];
+foreach ($genreProbe as [$t, $g, $pi]) {
+    for ($v = 1; $v <= 40; $v++) {
+        $q = fallbackQuote($t, $g, $pi, $v);
+        $words = preg_split('/\s+/', trim($q)) ?: [];
+        $last = strtolower(rtrim((string) end($words), '.,;:!?'));
+        if (in_array($last, FRAMEFLUX_DANGLING_WORDS, true)) {
+            $dangling[] = "{$t} seed {$v}: \"{$q}\"";
+        }
+    }
+}
+if ($dangling !== []) {
+    echo '     ' . implode("\n     ", array_slice($dangling, 0, 4)) . "\n";
+}
+expect($dangling === [], 'taglines never end on a dangling word');
+
 // Quality notes flag a genre-label regression.
 $notes = assessDnaQuality($typeBase);
 expect(!in_array('genre-visibility-unlocked', $notes, true), 'healthy DNA has no genre-visibility note');
