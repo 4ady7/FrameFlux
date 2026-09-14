@@ -656,7 +656,14 @@ function drawDirectionalLight(p, dna, seed, fx, fy) {
 function drawNarrativeAnchor(p, dna, seed, fx, fy) {
   const pal = dnaPalette(dna);
   const semantic = dnaSemantic(dna);
-  const metaphor = semantic.narrativeAnchor || semantic.visualMetaphor || "silhouette-threshold";
+  const metaphor = (() => {
+    const anchor = semantic.narrativeAnchor || "";
+    const visual = semantic.visualMetaphor || "";
+    if (anchor && anchor !== "silhouette-threshold") {
+      return anchor;
+    }
+    return visual || "silhouette-threshold";
+  })();
   const material = semantic.material || "paper";
   const spatial = semantic.spatial || "isolated";
   const scale = anchorScale(dna, seed);
@@ -746,78 +753,94 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
       p.circle(ox, oy, 6);
     }
   } else if (metaphor === "chaotic-key" || metaphor === "tangled-cords" || metaphor === "chandelier-cluster") {
-    p.rotate(-0.22);
+    // Oversized comedy key — must read as a key fighting for space, not a door.
+    p.rotate(-0.55);
     p.rectMode(p.CENTER);
     p.noStroke();
-    p.fill(...primary, 210);
-    p.circle(-POSTER_W * 0.16 * scale, 0, POSTER_W * 0.2 * scale);
-    p.fill(...bg, 230);
-    p.circle(-POSTER_W * 0.16 * scale, 0, POSTER_W * 0.1 * scale);
-    p.fill(...accent, 200);
-    p.rect(POSTER_W * 0.06 * scale, 0, POSTER_W * 0.42 * scale, POSTER_H * 0.045 * scale, 4);
-    for (let i = 0; i < 5; i += 1) {
-      const tx = POSTER_W * (0.18 + i * 0.04) * scale;
-      p.fill(...secondary, 200);
-      p.rect(tx, POSTER_H * (i % 2 === 0 ? 0.04 : -0.05) * scale, POSTER_W * 0.035 * scale, POSTER_H * (0.08 + (i % 3) * 0.03) * scale, 2);
+    p.fill(...primary, 230);
+    p.circle(-POSTER_W * 0.18 * scale, 0, POSTER_W * 0.28 * scale);
+    p.fill(...bg, 235);
+    p.circle(-POSTER_W * 0.18 * scale, 0, POSTER_W * 0.14 * scale);
+    p.fill(...hexToRgb(pal.highlight || pal.accent), 230);
+    p.rect(POSTER_W * 0.08 * scale, 0, POSTER_W * 0.52 * scale, POSTER_H * 0.07 * scale, 6);
+    const teeth = [0.18, 0.08, 0.22, 0.1, 0.16];
+    for (let i = 0; i < teeth.length; i += 1) {
+      p.fill(...(i % 2 ? secondary : accent), 230);
+      p.rect(
+        POSTER_W * (0.02 + i * 0.08) * scale,
+        POSTER_H * (0.06 + (i % 2) * 0.02) * scale,
+        POSTER_W * 0.055 * scale,
+        POSTER_H * teeth[i] * scale,
+        2
+      );
     }
     p.noFill();
-    p.stroke(...accent, 160);
-    p.strokeWeight(2.2);
-    p.circle(-POSTER_W * 0.16 * scale, 0, POSTER_W * 0.22 * scale);
-    p.strokeWeight(2.4);
-    for (let i = 0; i < 10; i += 1) {
-      p.stroke(...(i % 2 ? accent : secondary), 140);
-      p.strokeWeight(1.4 + (i % 3));
-      let x = p.random(-POSTER_W * 0.28, POSTER_W * 0.3) * scale;
-      let y = p.random(-POSTER_H * 0.16, POSTER_H * 0.2) * scale;
+    p.stroke(...accent, 180);
+    p.strokeWeight(5);
+    p.circle(-POSTER_W * 0.18 * scale, 0, POSTER_W * 0.28 * scale);
+    p.strokeWeight(2.6);
+    for (let i = 0; i < 14; i += 1) {
+      p.stroke(...(i % 2 ? accent : secondary), 170);
+      p.strokeWeight(2 + (i % 4));
+      let x = p.random(-POSTER_W * 0.36, POSTER_W * 0.4) * scale;
+      let y = p.random(-POSTER_H * 0.22, POSTER_H * 0.24) * scale;
       p.beginShape();
-      for (let s = 0; s < 16; s += 1) {
+      for (let s = 0; s < 20; s += 1) {
         p.vertex(x, y);
-        x += Math.cos(s * 0.5 + i) * 10 * scale;
-        y += Math.sin(s * 0.7 + i * 0.3) * 9 * scale;
+        x += Math.cos(s * 0.55 + i) * 12 * scale;
+        y += Math.sin(s * 0.8 + i * 0.35) * 11 * scale;
       }
       p.endShape();
     }
-    if (metaphor !== "tangled-cords") {
-      p.noStroke();
-      for (let i = 0; i < 8; i += 1) {
-        p.push();
-        p.translate(p.random(-80, 90) * scale, p.random(-70, 80) * scale);
-        p.rotate(p.random(-0.8, 0.8));
-        p.fill(...hexToRgb(pal.highlight || pal.accent), 90);
-        p.quad(-8, 0, 0, -18, 8, 0, 0, 10);
-        p.pop();
-      }
+    p.noStroke();
+    for (let i = 0; i < 10; i += 1) {
+      p.push();
+      p.translate(p.random(-110, 120) * scale, p.random(-90, 100) * scale);
+      p.rotate(p.random(-1, 1));
+      p.fill(...hexToRgb(pal.highlight || pal.accent), 120);
+      p.quad(-10, 0, 0, -22, 10, 0, 0, 12);
+      p.pop();
     }
   } else if (metaphor === "coastal-compass" || metaphor === "compass-rose") {
+    p.noStroke();
+    p.fill(...hexToRgb(pal.highlight || pal.accent), 40);
+    p.circle(POSTER_W * 0.06 * scale, -POSTER_H * 0.08 * scale, POSTER_W * 0.42 * scale);
+    p.rectMode(p.CENTER);
+    p.fill(...secondary, 170);
+    p.rotate(0.12);
+    p.rect(POSTER_W * 0.2 * scale, POSTER_H * 0.16 * scale, POSTER_W * 0.34 * scale, POSTER_H * 0.2 * scale);
+    p.rotate(-0.12);
+    p.stroke(...primary, 80);
+    p.strokeWeight(1);
+    p.line(POSTER_W * 0.08 * scale, POSTER_H * 0.1 * scale, POSTER_W * 0.32 * scale, POSTER_H * 0.14 * scale);
+    p.line(POSTER_W * 0.1 * scale, POSTER_H * 0.16 * scale, POSTER_W * 0.3 * scale, POSTER_H * 0.19 * scale);
     p.noFill();
-    p.stroke(...primary, 200);
-    p.strokeWeight(4);
-    p.circle(0, 0, POSTER_W * 0.5 * scale);
-    p.strokeWeight(1.6);
-    p.circle(0, 0, POSTER_W * 0.38 * scale);
-    p.stroke(...accent, 160);
-    for (let i = 0; i < 16; i += 1) {
-      const a = (i / 16) * p.TWO_PI;
-      const inner = i % 4 === 0 ? 0.16 : 0.2;
+    p.stroke(...primary, 220);
+    p.strokeWeight(6);
+    p.circle(0, 0, POSTER_W * 0.56 * scale);
+    p.strokeWeight(2);
+    p.circle(0, 0, POSTER_W * 0.42 * scale);
+    p.stroke(...accent, 190);
+    for (let i = 0; i < 32; i += 1) {
+      const a = (i / 32) * p.TWO_PI;
+      const inner = i % 8 === 0 ? 0.14 : i % 4 === 0 ? 0.18 : 0.2;
+      p.strokeWeight(i % 8 === 0 ? 3 : 1.4);
       p.line(
         Math.cos(a) * POSTER_W * inner * scale,
         Math.sin(a) * POSTER_W * inner * scale,
-        Math.cos(a) * POSTER_W * 0.24 * scale,
-        Math.sin(a) * POSTER_W * 0.24 * scale
+        Math.cos(a) * POSTER_W * 0.26 * scale,
+        Math.sin(a) * POSTER_W * 0.26 * scale
       );
     }
     p.noStroke();
-    p.fill(...accent, 200);
-    p.triangle(0, -POSTER_H * 0.16 * scale, -12 * scale, 8 * scale, 12 * scale, 8 * scale);
-    p.fill(...secondary, 180);
-    p.triangle(0, POSTER_H * 0.12 * scale, -9 * scale, 0, 9 * scale, 0);
-    p.fill(...hexToRgb(pal.highlight || pal.accent), 55);
-    p.circle(POSTER_W * 0.08 * scale, -POSTER_H * 0.1 * scale, POSTER_W * 0.22 * scale);
-    p.fill(...secondary, 140);
-    p.rectMode(p.CENTER);
-    p.rotate(0.18);
-    p.rect(POSTER_W * 0.16 * scale, POSTER_H * 0.12 * scale, POSTER_W * 0.28 * scale, POSTER_H * 0.16 * scale);
+    p.fill(...accent, 230);
+    p.triangle(0, -POSTER_H * 0.2 * scale, -16 * scale, 10 * scale, 16 * scale, 10 * scale);
+    p.fill(...primary, 200);
+    p.triangle(0, POSTER_H * 0.16 * scale, -12 * scale, 0, 12 * scale, 0);
+    p.fill(...bg, 255);
+    p.circle(0, 0, 14);
+    p.fill(...accent, 255);
+    p.circle(0, 0, 6);
   } else if (
     metaphor === "correspondence-clock" ||
     metaphor === "handwritten-letter" ||
@@ -844,42 +867,44 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
       p.rect(-POSTER_W * 0.1 * scale, -20, 8, 36, 3);
       p.rect(POSTER_W * 0.12 * scale, -24, 8, 36, 3);
     } else {
-      const sheets = metaphor === "correspondence-clock" ? 7 : 3;
+      const sheets = metaphor === "correspondence-clock" ? 8 : 3;
       for (let i = 0; i < sheets; i += 1) {
         p.push();
-        p.rotate((i - sheets / 2) * 0.11);
+        const ang = (i / sheets) * p.TWO_PI;
+        p.rotate(metaphor === "correspondence-clock" ? ang : (i - sheets / 2) * 0.14);
         p.noStroke();
-        p.fill(0, 0, 0, 30);
-        p.rect(6, 8, POSTER_W * 0.42 * scale, POSTER_H * 0.28 * scale);
-        p.fill(...secondary, 210 - i * 12);
-        p.rect(0, 0, POSTER_W * 0.42 * scale, POSTER_H * 0.28 * scale);
-        p.stroke(...primary, 80);
+        p.fill(0, 0, 0, 28);
+        p.rect(8, 10, POSTER_W * 0.34 * scale, POSTER_H * 0.16 * scale);
+        p.fill(...secondary, 220 - i * 10);
+        p.rect(0, 0, POSTER_W * 0.34 * scale, POSTER_H * 0.16 * scale);
+        p.stroke(...primary, 90);
         p.strokeWeight(1);
-        p.line(-POSTER_W * 0.16 * scale, -10, POSTER_W * 0.16 * scale, -6);
-        p.line(-POSTER_W * 0.15 * scale, 6, POSTER_W * 0.12 * scale, 10);
+        p.line(-POSTER_W * 0.12 * scale, -8, POSTER_W * 0.12 * scale, -4);
+        p.line(-POSTER_W * 0.11 * scale, 4, POSTER_W * 0.1 * scale, 8);
         p.pop();
       }
       p.noStroke();
-      p.fill(...accent, 50);
-      p.ellipse(POSTER_W * 0.08 * scale, POSTER_H * 0.08 * scale, 48 * scale, 32 * scale);
+      p.fill(...accent, 70);
+      p.ellipse(POSTER_W * 0.1 * scale, POSTER_H * 0.1 * scale, 56 * scale, 36 * scale);
       if (metaphor === "correspondence-clock" || metaphor === "railway-route") {
         p.noFill();
-        p.stroke(...primary, 180);
-        p.strokeWeight(2.4);
-        p.circle(0, 0, POSTER_W * 0.5 * scale);
-        p.strokeWeight(3);
-        p.line(0, 0, 0, -POSTER_H * 0.14 * scale);
-        p.line(0, 0, POSTER_W * 0.12 * scale, 18 * scale);
-        p.fill(...accent, 200);
+        p.stroke(...primary, 200);
+        p.strokeWeight(3.2);
+        p.circle(0, 0, POSTER_W * 0.58 * scale);
+        p.strokeWeight(5);
+        p.line(0, 0, 0, -POSTER_H * 0.16 * scale);
+        p.strokeWeight(3.5);
+        p.line(0, 0, POSTER_W * 0.14 * scale, 22 * scale);
+        p.fill(...accent, 230);
         p.noStroke();
-        p.circle(0, 0, 8);
+        p.circle(0, 0, 12);
         p.noFill();
-        p.stroke(...accent, 90);
-        p.strokeWeight(1.4);
-        for (let i = 0; i < 5; i += 1) {
+        p.stroke(...accent, 110);
+        p.strokeWeight(1.6);
+        for (let i = 0; i < 6; i += 1) {
           p.beginShape();
-          for (let x = -POSTER_W * 0.4; x < POSTER_W * 0.4; x += 16) {
-            p.vertex(x, Math.sin(x * 0.02 + i) * 18 + i * 14 - 40);
+          for (let x = -POSTER_W * 0.46; x < POSTER_W * 0.46; x += 14) {
+            p.vertex(x, Math.sin(x * 0.018 + i) * 16 + i * 16 - 48);
           }
           p.endShape();
         }
