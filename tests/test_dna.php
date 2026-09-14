@@ -315,18 +315,45 @@ expect($signatures[0] !== $signatures[1], 'comedy and psychological horror get d
 $titleSigs = [];
 $quoteSigs = [];
 $structures = [];
+$letterformSet = [];
+$legibilitySet = [];
+$placements = [];
+$nonContrast = [];
 foreach ($films as $i => [$t, $g, $pi]) {
     $d = normalizeParams(fallbackVisualParams($t, $g, $pi, 700 + $i, 'generate', null), $t, $g, $pi);
     $titleSigs[implode('|', $d['typography']['title'])] = true;
     $quoteSigs[$d['typography']['quote']['style']] = true;
     $structures[$d['typography']['title']['structure']] = true;
+    $letterformSet[$d['typography']['title']['letterforms']] = true;
+    $legibilitySet[$d['typography']['quote']['legibility']] = true;
+    $placements[$d['typography']['title']['placement']] = true;
+    if ($d['typography']['quote']['pairing'] !== 'contrast') {
+        $nonContrast[] = $t;
+    }
     if ($d['typography']['genreVisibility'] !== 'hidden') {
         expect(false, "genre stayed hidden for {$t}");
     }
 }
 expect(count($titleSigs) >= 5, 'film matrix yields varied title treatments');
-expect(count($quoteSigs) >= 3, 'film matrix yields varied quote styles');
+expect(count($quoteSigs) >= 4, 'film matrix yields varied quote styles');
 expect(count($structures) >= 3, 'film matrix yields varied title structures');
+expect(count($letterformSet) >= 4, 'film matrix yields varied letterforms');
+expect(count($legibilitySet) >= 3, 'quote legibility technique varies with style');
+expect(count($placements) >= 2, 'film matrix yields varied title placements');
+expect($nonContrast === [], 'every film pairs quote against title by contrast');
+
+// Every letterform must be able to find a contrasting quote face.
+$noContrastFor = [];
+foreach (FRAMEFLUX_LETTERFORMS as $lf) {
+    $cat = FRAMEFLUX_LETTERFORM_CATEGORY[$lf] ?? 'sans';
+    for ($s = 0; $s < 7; $s++) {
+        $picked = pickContrastingQuoteStyle($cat, [], $s);
+        if ((FRAMEFLUX_QUOTE_STYLE_CATEGORY[$picked] ?? 'serif') === $cat) {
+            $noContrastFor[] = "{$lf}/seed{$s}";
+        }
+    }
+}
+expect($noContrastFor === [], 'every letterform resolves to a contrasting quote face');
 
 // Improve keeps the typographic identity; the whitelist must carry it.
 $typeBase = normalizeParams(fallbackVisualParams('Glass Nerve', 'horror', 'Cracked hospital windows.', 8, 'generate', null), 'Glass Nerve', 'horror', 'Cracked hospital windows.');
