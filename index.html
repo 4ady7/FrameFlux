@@ -23,9 +23,9 @@
       <section class="panel" aria-labelledby="form-heading">
         <h1 id="form-heading">Make a poster from a pitch</h1>
         <p class="lede">
-          Enter a title, genre, and optional one-line. Generate invents a new visual
-          direction and quote. Improve feeds the current design back to the model.
-          Regenerate either re-rolls noise or asks AI for a new background.
+          Enter a title, genre, and optional one-line. FrameFlux interprets the film,
+          builds Visual DNA, and offers three related directions. Regenerate explores
+          the same idea. Reimagine asks for a new interpretation.
         </p>
 
         <form id="film-form">
@@ -48,27 +48,17 @@
             ></textarea>
           </label>
 
-          <fieldset class="regen-mode">
-            <legend>When regenerating</legend>
-            <label class="choice">
-              <input type="radio" name="regen-mode" value="noise" checked />
-              Re-roll noise only
-            </label>
-            <label class="choice">
-              <input type="radio" name="regen-mode" value="ai-background" />
-              Ask AI for a new background from the pitch
-            </label>
-          </fieldset>
-
           <div class="actions">
             <button type="submit" id="generate">Generate</button>
             <button type="button" id="improve" disabled>Improve</button>
             <button type="button" id="regenerate" disabled>Regenerate</button>
+            <button type="button" id="reimagine" disabled>Reimagine</button>
             <button type="button" id="download" disabled>Download PNG</button>
           </div>
         </form>
 
-        <p id="status" class="status" role="status"></p>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+        <p id="error" class="status error" role="alert" aria-live="assertive" hidden></p>
         <dl class="meta" id="meta" hidden>
           <div>
             <dt>Pattern</dt>
@@ -85,9 +75,23 @@
         </dl>
       </section>
 
-      <section class="poster-wrap" aria-label="Generated poster">
-        <div class="frame">
-          <div id="poster"></div>
+      <section class="poster-wrap" aria-label="Generated posters">
+        <div class="frame" id="poster-frame">
+          <div id="poster" role="img" aria-label="Selected poster preview"></div>
+        </div>
+        <div class="variations" id="variations" hidden>
+          <button type="button" class="variation" data-role="signature" aria-pressed="true">
+            <span class="variation-label">Signature</span>
+            <div id="v-signature" class="variation-thumb"></div>
+          </button>
+          <button type="button" class="variation" data-role="hybrid" aria-pressed="false">
+            <span class="variation-label">Hybrid</span>
+            <div id="v-hybrid" class="variation-thumb"></div>
+          </button>
+          <button type="button" class="variation" data-role="alternative" aria-pressed="false">
+            <span class="variation-label">Alternative</span>
+            <div id="v-alternative" class="variation-thumb"></div>
+          </button>
         </div>
       </section>
     </main>
