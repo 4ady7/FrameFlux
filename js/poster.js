@@ -1,49 +1,146 @@
 const POSTER_W = 600;
 const POSTER_H = 900;
 
-const GENRE_FONT_RULES = [
-  ["horror", "Cinzel"],
-  ["sci", "Orbitron"],
-  ["romance", "Playfair Display"],
-  ["comedy", "Bungee"],
-  ["action", "Oswald"],
-  ["drama", "Cormorant Garamond"],
-  ["thriller", "Russo One"],
-  ["document", "IBM Plex Sans"],
-  ["fantasy", "Cinzel"],
-  ["mystery", "Oswald"],
-  ["noir", "Oswald"],
-  ["anim", "Bungee"],
-  ["western", "Cinzel"],
-];
+// Font families keyed by letterform language, with the weights actually loaded
+// in index.html so we never fall back to a synthesised face.
+const FONT_FAMILIES = {
+  "Playfair Display": { weights: [400, 500, 700, 900], italic: true },
+  "Cormorant Garamond": { weights: [400, 500, 600], italic: true },
+  Cinzel: { weights: [400, 500, 700, 900], italic: false },
+  "Roboto Slab": { weights: [100, 300, 400, 700, 900], italic: false },
+  Jost: { weights: [200, 300, 400, 500, 700], italic: false },
+  "Space Grotesk": { weights: [300, 400, 500, 700], italic: false },
+  Oswald: { weights: [200, 300, 400, 500, 700], italic: false },
+  Archivo: { weights: [100, 300, 400, 700, 900], italic: false },
+  "Saira Stencil One": { weights: [400], italic: false },
+  Caveat: { weights: [400, 500, 600, 700], italic: false },
+  "IBM Plex Mono": { weights: [400, 600], italic: false },
+  "IBM Plex Sans": { weights: [400, 500, 600], italic: false },
+};
 
-function fontFor(genre, titleStyle, semantic) {
-  if (titleStyle === "elegant" || titleStyle === "editorial") {
-    return "Playfair Display";
+const LETTERFORM_FAMILY = {
+  "classical-serif": "Playfair Display",
+  "slab-serif": "Roboto Slab",
+  "geometric-sans": "Jost",
+  grotesque: "Space Grotesk",
+  condensed: "Oswald",
+  extended: "Archivo",
+  "hand-lettered": "Caveat",
+  distressed: "Cinzel",
+  "technical-stencil": "Saira Stencil One",
+};
+
+const WEIGHT_VALUE = { hairline: 100, light: 300, regular: 400, bold: 700, black: 900 };
+
+const TRACKING_EM = { tight: -0.035, normal: 0, wide: 0.14 };
+
+// Each quote style carries its own face, slant, and size relationship to the title.
+const QUOTE_STYLE_FACE = {
+  "editorial-italic": { family: "Cormorant Garamond", italic: true, weight: 500, ratio: 0.34, min: 15, lead: 1.45 },
+  caption: { family: "IBM Plex Sans", italic: false, weight: 500, ratio: 0.26, min: 12, lead: 1.55, upper: true, track: 0.08 },
+  "cinematic-subtitle": { family: "Space Grotesk", italic: false, weight: 400, ratio: 0.3, min: 14, lead: 1.5 },
+  typewriter: { family: "IBM Plex Mono", italic: false, weight: 400, ratio: 0.26, min: 12, lead: 1.6 },
+  handwritten: { family: "Caveat", italic: false, weight: 600, ratio: 0.42, min: 18, lead: 1.35 },
+};
+
+function snapWeight(family, requested) {
+  const meta = FONT_FAMILIES[family];
+  if (!meta) {
+    return requested;
   }
-  if (titleStyle === "condensed") {
-    return "Oswald";
+  return meta.weights.reduce(
+    (best, w) => (Math.abs(w - requested) < Math.abs(best - requested) ? w : best),
+    meta.weights[0]
+  );
+}
+
+function cssFont(family, weight, size, italic) {
+  const slant = italic && FONT_FAMILIES[family]?.italic ? "italic " : "";
+  return `${slant}${weight} ${Math.round(size)}px "${family}", sans-serif`;
+}
+
+const LETTER_SPACING_SUPPORTED =
+  typeof CanvasRenderingContext2D !== "undefined" &&
+  "letterSpacing" in CanvasRenderingContext2D.prototype;
+
+/**
+ * Title and quote faces resolved from Visual DNA. Genre is deliberately absent:
+ * it informs the DNA upstream but never selects a face here.
+ */
+function titleFace(dna) {
+  const dir = dna.typography?.title || {};
+  const letterforms = dir.letterforms || "grotesque";
+  const family = LETTERFORM_FAMILY[letterforms] || "Space Grotesk";
+  return {
+    family,
+    weight: snapWeight(family, WEIGHT_VALUE[dir.weight] ?? 400),
+    italic: false,
+    tracking: TRACKING_EM[dir.tracking] ?? 0,
+    letterforms,
+    case: dir.case || "uppercase",
+    structure: dir.structure || "solid",
+    placement: dir.placement || "centered",
+  };
+}
+
+function quoteFace(dna) {
+  const dir = dna.typography?.quote || {};
+  const style = dir.style || "editorial-italic";
+  const face = QUOTE_STYLE_FACE[style] || QUOTE_STYLE_FACE["editorial-italic"];
+  return {
+    ...face,
+    style,
+    weight: snapWeight(face.family, face.weight),
+    legibility: dir.legibility || "scrim",
+    placement: dir.placement || "below-title",
+  };
+}
+
+/**
+ * Ask the browser for the exact faces this DNA needs. Resolves to true when a
+ * font arrived that was not previously available, meaning a redraw is worthwhile.
+ */
+function ensureTypeFaces(dna) {
+  if (typeof document === "undefined" || !document.fonts || !document.fonts.load) {
+    return Promise.resolve(false);
   }
-  if (titleStyle === "geometric") {
-    return "Orbitron";
-  }
-  const emotion = semantic?.emotionalCore || "";
-  if (emotion === "intimacy" || emotion === "nostalgia" || emotion === "grief" || emotion === "longing") {
-    return "Cormorant Garamond";
-  }
-  if (emotion === "paranoia" || emotion === "urgency" || emotion === "dread") {
-    return "Oswald";
-  }
-  if (emotion === "wonder" || emotion === "triumph") {
-    return "Cinzel";
-  }
-  const g = (genre || "").toLowerCase();
-  for (const [needle, font] of GENRE_FONT_RULES) {
-    if (g.includes(needle)) {
-      return font;
+  const title = titleFace(dna);
+  const quote = quoteFace(dna);
+  const specs = [
+    cssFont(title.family, title.weight, 48, false),
+    cssFont(quote.family, quote.weight, 16, quote.italic),
+  ];
+  const missing = specs.filter((s) => {
+    try {
+      return !document.fonts.check(s);
+    } catch (err) {
+      return true;
     }
+  });
+  if (!missing.length) {
+    return Promise.resolve(false);
   }
-  return "Bebas Neue";
+  return Promise.all(missing.map((s) => document.fonts.load(s).catch(() => null))).then(() => true);
+}
+
+function applyCase(text, mode) {
+  const raw = String(text || "");
+  if (mode === "uppercase") {
+    return raw.toUpperCase();
+  }
+  if (mode === "lowercase") {
+    return raw.toLowerCase();
+  }
+  if (mode === "title") {
+    return raw.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  }
+  if (mode === "mixed") {
+    return raw
+      .split(/\s+/)
+      .map((w, i) => (i % 2 === 0 ? w.toUpperCase() : w.toLowerCase()))
+      .join(" ");
+  }
+  return raw;
 }
 
 function hexToRgb(hex) {
@@ -66,44 +163,48 @@ function ny(n) {
   return n * POSTER_H;
 }
 
-function fitTextSize(p, font, str, maxWidth, startSize, minSize) {
-  p.textFont(font || "sans-serif");
-  let size = startSize;
-  p.textSize(size);
-  while (p.textWidth(str) > maxWidth && size > minSize) {
-    size -= 2;
-    p.textSize(size);
+function styleCtx(ctx, face, size) {
+  ctx.font = cssFont(face.family, face.weight, size, face.italic);
+  const track = Number(face.tracking ?? face.track ?? 0);
+  if (LETTER_SPACING_SUPPORTED) {
+    ctx.letterSpacing = `${track}em`;
   }
-  return size;
 }
 
-function wrapLines(p, text, maxWidth, maxLines) {
-  const words = String(text || "")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+function measureStyled(ctx, face, size, str) {
+  styleCtx(ctx, face, size);
+  let w = ctx.measureText(str).width;
+  if (!LETTER_SPACING_SUPPORTED) {
+    const track = Number(face.tracking ?? face.track ?? 0);
+    w += track * size * Math.max(0, str.length - 1);
+  }
+  return w;
+}
+
+function wrapStyled(ctx, face, size, text, maxWidth, maxLines) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
   if (!words.length) {
     return [];
   }
-
   const lines = [];
   let current = "";
   for (let i = 0; i < words.length; i += 1) {
-    const word = words[i];
-    const next = current ? `${current} ${word}` : word;
+    const next = current ? `${current} ${words[i]}` : words[i];
     const isLastSlot = lines.length === maxLines - 1;
-    if (p.textWidth(next) > maxWidth && current) {
+    if (measureStyled(ctx, face, size, next) > maxWidth && current) {
       if (isLastSlot) {
-        const rest = [current].concat(words.slice(i)).join(" ");
-        let clipped = rest;
-        while (p.textWidth(`${clipped}…`) > maxWidth && clipped.length > 1) {
+        let clipped = [current].concat(words.slice(i)).join(" ");
+        while (
+          clipped.length > 1 &&
+          measureStyled(ctx, face, size, `${clipped}…`) > maxWidth
+        ) {
           clipped = clipped.slice(0, -1).trim();
         }
         lines.push(`${clipped}…`);
         return lines;
       }
       lines.push(current);
-      current = word;
+      current = words[i];
     } else {
       current = next;
     }
@@ -112,6 +213,82 @@ function wrapLines(p, text, maxWidth, maxLines) {
     lines.push(current);
   }
   return lines;
+}
+
+/**
+ * Title scale is derived from length and the available safe width. Long titles
+ * break to more lines before they are allowed to shrink below a legible floor.
+ */
+function fitTitleBlock(ctx, face, text, maxWidth, maxSize, minSize) {
+  for (let maxLines = 1; maxLines <= 3; maxLines += 1) {
+    // A single long word can never wrap, so allow it to scale down further.
+    const floor = maxLines === 3 ? minSize : Math.max(minSize, maxSize * (maxLines === 1 ? 0.62 : 0.46));
+    for (let size = maxSize; size >= floor; size -= 2) {
+      const lines = wrapStyled(ctx, face, size, text, maxWidth, maxLines);
+      if (lines.length > maxLines) {
+        continue;
+      }
+      const widest = Math.max(...lines.map((l) => measureStyled(ctx, face, size, l)), 0);
+      if (widest <= maxWidth && !lines.some((l) => l.endsWith("…"))) {
+        return { lines, size };
+      }
+    }
+  }
+  const lines = wrapStyled(ctx, face, minSize, text, maxWidth, 3);
+  return { lines, size: minSize };
+}
+
+/**
+ * Resolve where the title and quote sit, based on the DNA placement decision and
+ * the focal mass, so type lands in negative space rather than a fixed slot.
+ * Returns an extended spec; titleSafe is updated so procedural marks stay clear.
+ */
+function typeLayout(dna, spec) {
+  const face = titleFace(dna);
+  const quote = quoteFace(dna);
+  const focalY = Number(dnaComp(dna).focalY ?? 0.42);
+  let placement = face.placement;
+
+  // Never stack the title on top of the focal mass.
+  if (placement === "centered" && Math.abs(focalY - 0.5) < 0.12) {
+    placement = focalY <= 0.5 ? "lower-third" : "upper-third";
+  }
+
+  const isSplitColumn = spec.id === "split-editorial";
+  const bandFor = (id) => {
+    if (id === "upper-third") return 0.19;
+    if (id === "lower-third") return 0.79;
+    if (id === "split") return focalY <= 0.5 ? 0.76 : 0.22;
+    return 0.5;
+  };
+  const titleY = bandFor(placement);
+
+  const align = isSplitColumn ? "left" : spec.align;
+  const titleX = isSplitColumn ? 0.07 : align === "center" ? 0.5 : 0.08;
+  const halfH = placement === "centered" ? 0.16 : 0.13;
+
+  let quoteY;
+  if (quote.placement === "bottom-anchored") {
+    quoteY = 0.9;
+  } else if (quote.placement === "focal-adjacent") {
+    quoteY = Math.min(0.9, Math.max(0.12, focalY + (focalY > titleY ? -0.24 : 0.24)));
+  } else {
+    quoteY = null; // below-title, resolved against the measured title block
+  }
+
+  return {
+    ...spec,
+    align,
+    title: { x: titleX, y: titleY },
+    titleSafe: {
+      x: Math.max(0.02, titleX - (align === "center" ? 0.42 : 0.04)),
+      y: Math.max(0.02, titleY - halfH),
+      w: isSplitColumn ? 0.46 : align === "center" ? 0.84 : 0.86,
+      h: halfH * 2,
+    },
+    quoteAnchor: quoteY,
+    titlePlacement: placement,
+  };
 }
 
 function layoutSpec(layout) {
@@ -997,94 +1174,339 @@ function patternPlan(dna, role) {
   return [{ name: primary, weight: 0.72, seedShift: 0 }];
 }
 
-function drawTypography(p, dna, spec) {
+function relativeLuminance(rgb) {
+  return (rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114) / 255;
+}
+
+/** Mean and spread of artwork luminance under a normalised rect. */
+function localLuminance(sampler, rect) {
+  let sum = 0;
+  let min = 1;
+  let max = 0;
+  let n = 0;
+  for (let v = rect.y; v <= rect.y + rect.h; v += rect.h / 6) {
+    for (let u = rect.x; u <= rect.x + rect.w; u += rect.w / 8) {
+      const l = sampler.at(Math.min(1, Math.max(0, u)), Math.min(1, Math.max(0, v)));
+      sum += l;
+      min = Math.min(min, l);
+      max = Math.max(max, l);
+      n += 1;
+    }
+  }
+  return { mean: n ? sum / n : 0.3, spread: max - min };
+}
+
+/**
+ * Legibility is non-negotiable: risky structural treatments degrade to safer
+ * ones when the artwork underneath does not support them.
+ */
+function resolveTitleTreatment(structure, sampler, rect, textLum) {
+  const { mean, spread } = localLuminance(sampler, rect);
+  const separation = Math.abs(mean - textLum);
+  let resolved = structure;
+  let scrim = 0;
+
+  if (resolved === "outline" && (spread > 0.34 || separation < 0.42)) {
+    resolved = "solid";
+  }
+  if (resolved === "fragmented" && separation < 0.24) {
+    resolved = "solid";
+  }
+  if (separation < 0.34) {
+    scrim = Math.min(1, (0.34 - separation) / 0.34 + 0.35);
+  }
+  if ((resolved === "textured" || resolved === "gradient") && separation < 0.42) {
+    scrim = Math.max(scrim, 0.55);
+  }
+  return { structure: resolved, scrim, mean, spread };
+}
+
+function ctxAlign(align) {
+  return align === "center" ? "center" : align === "right" ? "right" : "left";
+}
+
+function drawTexturedLine(p, ctx, line, x, y, size, face, baseColor, textureColor) {
+  const w = measureStyled(ctx, face, size, line);
+  if (w <= 0) {
+    return;
+  }
+  const pad = Math.ceil(size * 0.6);
+  const off = document.createElement("canvas");
+  off.width = Math.ceil(w) + pad * 2;
+  off.height = Math.ceil(size * 1.7) + pad * 2;
+  const o = off.getContext("2d");
+  styleCtx(o, face, size);
+  o.textAlign = "left";
+  o.textBaseline = "top";
+  o.fillStyle = `rgb(${baseColor.join(",")})`;
+  o.fillText(line, pad, pad);
+
+  // Wear only where glyphs already are, so the material lives in the letters.
+  o.globalCompositeOperation = "source-atop";
+  for (let i = 0; i < 90; i += 1) {
+    const sx = p.random(off.width);
+    const sy = p.random(off.height);
+    o.fillStyle = `rgba(${textureColor.join(",")},${0.1 + p.random() * 0.3})`;
+    o.fillRect(sx, sy, p.random(3, 16), p.random(0.6, 1.8));
+  }
+  for (let i = 0; i < 40; i += 1) {
+    o.fillStyle = `rgba(0,0,0,${0.08 + p.random() * 0.16})`;
+    o.fillRect(p.random(off.width), p.random(off.height), p.random(1, 4), p.random(1, 4));
+  }
+  o.globalCompositeOperation = "source-over";
+
+  const align = ctx.textAlign;
+  const dx = align === "center" ? x - w / 2 - pad : align === "right" ? x - w - pad : x - pad;
+  ctx.drawImage(off, dx, y - pad);
+}
+
+function drawTitleLine(p, ctx, line, x, y, size, face, treatment, colors, light) {
+  const { text, secondary, accent, highlight } = colors;
+  styleCtx(ctx, face, size);
+  ctx.textBaseline = "top";
+
+  if (treatment === "outline") {
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Math.max(1, size / 24);
+    ctx.strokeStyle = `rgb(${text.join(",")})`;
+    ctx.fillStyle = `rgba(${text.join(",")},0.12)`;
+    ctx.fillText(line, x, y);
+    ctx.strokeText(line, x, y);
+    return;
+  }
+
+  if (treatment === "gradient") {
+    // Gradient runs with the scene's light, not an arbitrary axis.
+    const w = measureStyled(ctx, face, size, line);
+    const align = ctx.textAlign;
+    const left = align === "center" ? x - w / 2 : align === "right" ? x - w : x;
+    const g = ctx.createLinearGradient(
+      left + w * (light.x > 0.5 ? 1 : 0),
+      y,
+      left + w * (light.x > 0.5 ? 0 : 1),
+      y + size
+    );
+    g.addColorStop(0, `rgb(${highlight.join(",")})`);
+    g.addColorStop(0.55, `rgb(${text.join(",")})`);
+    g.addColorStop(1, `rgba(${secondary.join(",")},0.85)`);
+    ctx.fillStyle = g;
+    ctx.fillText(line, x, y);
+    return;
+  }
+
+  if (treatment === "layered") {
+    const off = Math.max(2, size * 0.045);
+    ctx.fillStyle = `rgba(${secondary.join(",")},0.55)`;
+    ctx.fillText(line, x + off, y + off);
+    ctx.fillStyle = `rgba(${accent.join(",")},0.4)`;
+    ctx.fillText(line, x - off * 0.6, y - off * 0.5);
+    ctx.fillStyle = `rgb(${text.join(",")})`;
+    ctx.fillText(line, x, y);
+    return;
+  }
+
+  if (treatment === "fragmented") {
+    const bands = 5;
+    const bandH = (size * 1.25) / bands;
+    for (let i = 0; i < bands; i += 1) {
+      const shift = (p.random() - 0.5) * size * 0.12;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, y + i * bandH, POSTER_W, bandH + 0.6);
+      ctx.clip();
+      ctx.fillStyle = i % 2 === 0 ? `rgb(${text.join(",")})` : `rgba(${text.join(",")},0.82)`;
+      ctx.fillText(line, x + shift, y);
+      ctx.restore();
+    }
+    return;
+  }
+
+  if (treatment === "textured") {
+    drawTexturedLine(p, ctx, line, x, y, size, face, text, accent);
+    return;
+  }
+
+  // Solid, with a faint rim pickup on the lit side so type belongs to the scene.
+  ctx.fillStyle = `rgba(${highlight.join(",")},0.35)`;
+  ctx.fillText(line, x + (light.x > 0.5 ? -1.2 : 1.2), y - 1);
+  ctx.fillStyle = `rgb(${text.join(",")})`;
+  ctx.fillText(line, x, y);
+}
+
+function drawQuotePlate(ctx, rect, strength) {
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${0.3 + strength * 0.34})`;
+  const r = 6;
+  ctx.beginPath();
+  ctx.moveTo(rect.x + r, rect.y);
+  ctx.lineTo(rect.x + rect.w - r, rect.y);
+  ctx.quadraticCurveTo(rect.x + rect.w, rect.y, rect.x + rect.w, rect.y + r);
+  ctx.lineTo(rect.x + rect.w, rect.y + rect.h - r);
+  ctx.quadraticCurveTo(rect.x + rect.w, rect.y + rect.h, rect.x + rect.w - r, rect.y + rect.h);
+  ctx.lineTo(rect.x + r, rect.y + rect.h);
+  ctx.quadraticCurveTo(rect.x, rect.y + rect.h, rect.x, rect.y + rect.h - r);
+  ctx.lineTo(rect.x, rect.y + r);
+  ctx.quadraticCurveTo(rect.x, rect.y, rect.x + r, rect.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawTypography(p, dna, spec, sampler, seed) {
   const pal = dnaPalette(dna);
-  const textColor = pal.text;
-  const accent = pal.accent;
-  const genre = dna.concept?.genre || dna.genre || "";
-  const titleStyle = dna.typography?.titleStyle || dna.titleStyle || "bold";
-  const font = fontFor(genre, titleStyle, dnaSemantic(dna));
-  const titleCase = String(dna.concept?.title || dna.title || "").toUpperCase();
-  const startSize =
-    titleStyle === "condensed" ? 46 : titleStyle === "elegant" || titleStyle === "editorial" ? 48 : 54;
-  const minSize = 26;
-  const maxTitleWidth = spec.id === "split-editorial" ? POSTER_W * 0.36 : POSTER_W * 0.78;
-  const quoteWidth = spec.id === "split-editorial" ? POSTER_W * 0.34 : POSTER_W * 0.72;
+  const ctx = p.drawingContext;
+  const colors = {
+    text: hexToRgb(pal.text),
+    secondary: hexToRgb(pal.secondary),
+    accent: hexToRgb(pal.accent),
+    highlight: hexToRgb(pal.highlight || pal.accent),
+  };
+  const face = titleFace(dna);
+  const quote = quoteFace(dna);
+  const light = lightOrigin(dna, seed);
 
-  p.textFont(font);
-  const fitted = fitTextSize(p, font, titleCase, maxTitleWidth, startSize, minSize);
-  let titleLines;
-  let titleSize = fitted;
-  if (fitted > minSize || p.textWidth(titleCase) <= maxTitleWidth) {
-    titleLines = [titleCase];
-  } else {
-    titleSize = Math.max(minSize, startSize - 10);
-    p.textSize(titleSize);
-    titleLines = wrapLines(p, titleCase, maxTitleWidth, 3);
-    let longest = Math.max(...titleLines.map((line) => p.textWidth(line)), 0);
-    while (longest > maxTitleWidth && titleSize > minSize) {
-      titleSize -= 2;
-      p.textSize(titleSize);
-      titleLines = wrapLines(p, titleCase, maxTitleWidth, 3);
-      longest = Math.max(...titleLines.map((line) => p.textWidth(line)), 0);
-    }
-  }
+  const isSplitColumn = spec.id === "split-editorial";
+  const maxTitleWidth = isSplitColumn ? POSTER_W * 0.4 : POSTER_W * 0.8;
+  const quoteWidth = isSplitColumn ? POSTER_W * 0.36 : POSTER_W * 0.72;
+  const titleText = applyCase(dna.concept?.title || dna.title || "", face.case);
 
-  const lineHeight = titleSize * 1.08;
-  const genreSize = 12;
-  const quoteSize = 15;
-  p.textFont("Cormorant Garamond");
-  p.textSize(quoteSize);
-  const quoteLines = wrapLines(p, dna.concept?.quote || dna.quote || "", quoteWidth, 3);
+  // Scale from length and safe width, never a fixed size.
+  const maxSize = face.letterforms === "hand-lettered" ? 68 : 58;
+  const { lines: titleLines, size: titleSize } = fitTitleBlock(
+    ctx,
+    face,
+    titleText,
+    maxTitleWidth,
+    maxSize,
+    24
+  );
+  const lineHeight = titleSize * (face.letterforms === "hand-lettered" ? 0.92 : 1.06);
+  const titleH = titleLines.length * lineHeight;
 
-  const genreGap = 16;
-  const quoteGap = 20;
-  const blockHeight =
-    genreSize +
-    genreGap +
-    titleLines.length * lineHeight +
-    (quoteLines.length ? quoteGap + quoteLines.length * 22 : 0);
-
-  const centerY = ny(spec.title.y);
-  const contrast = dnaProc(dna).contrast || dna.contrast || 0.75;
-  drawContrastBackdrop(p, centerY, blockHeight, contrast);
-
-  const top = centerY - blockHeight / 2;
+  const align = ctxAlign(spec.align);
   const x = nx(spec.title.x);
-  const alignMode =
-    spec.align === "center" ? p.CENTER : spec.align === "right" ? p.RIGHT : p.LEFT;
+  const titleTop = ny(spec.title.y) - titleH / 2;
 
-  p.noStroke();
-  p.textAlign(alignMode, p.TOP);
-  const tracking = Number(dna.typography?.tracking ?? 0);
-  if (p.drawingContext && tracking) {
-    p.drawingContext.letterSpacing = `${tracking}em`;
+  const titleRect = {
+    x: Math.max(0, (align === "center" ? x - maxTitleWidth / 2 : x) / POSTER_W),
+    y: Math.max(0, titleTop / POSTER_H),
+    w: maxTitleWidth / POSTER_W,
+    h: Math.max(0.04, titleH / POSTER_H),
+  };
+  const textLum = relativeLuminance(colors.text);
+  const treatment = resolveTitleTreatment(face.structure, sampler, titleRect, textLum);
+
+  if (treatment.scrim > 0) {
+    const contrast = dnaProc(dna).contrast || dna.contrast || 0.75;
+    drawContrastBackdrop(p, titleTop + titleH / 2, titleH, contrast * treatment.scrim);
   }
 
-  p.fill(...hexToRgb(accent));
-  p.textFont("IBM Plex Sans");
-  p.textSize(genreSize);
-  p.text(String(genre).toUpperCase(), x, top);
+  p.randomSeed(seed + 909);
+  ctx.save();
+  ctx.textAlign = align;
+  titleLines.forEach((line, i) => {
+    drawTitleLine(p, ctx, line, x, titleTop + i * lineHeight, titleSize, face, treatment.structure, colors, light);
+  });
+  ctx.restore();
 
-  p.fill(...hexToRgb(textColor));
-  p.textFont(font);
-  p.textSize(titleSize);
-  p.textLeading(lineHeight);
-  p.text(titleLines.join("\n"), x, top + genreSize + genreGap);
-
-  if (quoteLines.length) {
-    const quoteY = top + genreSize + genreGap + titleLines.length * lineHeight + quoteGap;
-    p.fill(...hexToRgb(accent));
-    p.textFont("Cormorant Garamond");
-    p.textSize(quoteSize);
-    p.textLeading(22);
-    if (p.drawingContext) {
-      p.drawingContext.letterSpacing = "0em";
+  // --- Quote: its own face, hierarchy, placement, and legibility technique ---
+  const quoteText = String(dna.concept?.quote || dna.quote || "").trim();
+  if (!quoteText) {
+    if (LETTER_SPACING_SUPPORTED) {
+      ctx.letterSpacing = "0em";
     }
-    p.text(`“${quoteLines.join("\n")}”`, x, quoteY);
+    return;
   }
-  if (p.drawingContext) {
-    p.drawingContext.letterSpacing = "0em";
+
+  const quoteFaceSpec = {
+    family: quote.family,
+    weight: quote.weight,
+    italic: quote.italic,
+    tracking: quote.track ?? 0,
+  };
+  // Always clearly subordinate to the title.
+  const quoteSize = Math.max(
+    quote.min,
+    Math.min(titleSize * quote.ratio, titleSize * 0.5, 22)
+  );
+  const quoteBody = quote.upper ? quoteText.toUpperCase() : quoteText;
+  const quoteLead = quoteSize * quote.lead;
+  const quoteLines = wrapStyled(ctx, quoteFaceSpec, quoteSize, quoteBody, quoteWidth, 3);
+  const quoteH = quoteLines.length * quoteLead;
+
+  let quoteTop;
+  if (spec.quoteAnchor === null || spec.quoteAnchor === undefined) {
+    quoteTop = titleTop + titleH + Math.max(14, titleSize * 0.34);
+  } else {
+    quoteTop = ny(spec.quoteAnchor) - quoteH / 2;
+  }
+  // Stay inside the safe margins regardless of style.
+  const bottomLimit = POSTER_H - (spec.inset > 0 ? spec.inset * POSTER_W * 1.9 : 34) - quoteH;
+  quoteTop = Math.max(28, Math.min(quoteTop, bottomLimit));
+
+  const quoteRect = {
+    x: Math.max(0, (align === "center" ? x - quoteWidth / 2 : x) / POSTER_W),
+    y: quoteTop / POSTER_H,
+    w: quoteWidth / POSTER_W,
+    h: Math.max(0.02, quoteH / POSTER_H),
+  };
+  const quoteLum = localLuminance(sampler, quoteRect);
+  const quoteColor = quote.style === "caption" ? colors.accent : colors.text;
+  const quoteSeparation = Math.abs(quoteLum.mean - relativeLuminance(quoteColor));
+
+  // Technique belongs to the style; it only escalates when legibility demands it.
+  let technique = quote.legibility;
+  if (technique === "none" && quoteSeparation < 0.3) {
+    technique = "scrim";
+  }
+  if (technique === "scrim" && quoteSeparation < 0.16) {
+    technique = "plate";
+  }
+  if (technique === "shadow" && quoteLum.spread > 0.42 && quoteSeparation < 0.24) {
+    technique = "plate";
+  }
+
+  const measuredWidest = Math.max(
+    ...quoteLines.map((l) => measureStyled(ctx, quoteFaceSpec, quoteSize, l)),
+    0
+  );
+  if (technique === "plate") {
+    const padX = 14;
+    const padY = 10;
+    const plateX =
+      align === "center" ? x - measuredWidest / 2 - padX : align === "right" ? x - measuredWidest - padX : x - padX;
+    drawQuotePlate(
+      p.drawingContext,
+      { x: plateX, y: quoteTop - padY, w: measuredWidest + padX * 2, h: quoteH + padY * 1.6 },
+      1 - Math.min(1, quoteSeparation / 0.34)
+    );
+  } else if (technique === "scrim") {
+    drawContrastBackdrop(p, quoteTop + quoteH / 2, quoteH * 0.9, 0.42);
+  }
+
+  ctx.save();
+  ctx.textAlign = align;
+  ctx.textBaseline = "top";
+  styleCtx(ctx, quoteFaceSpec, quoteSize);
+  if (technique === "shadow") {
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = Math.max(4, quoteSize * 0.5);
+    ctx.shadowOffsetY = 1;
+  }
+  ctx.fillStyle = `rgba(${quoteColor.join(",")},${quote.style === "caption" ? 0.95 : 0.9})`;
+  const decorated =
+    quote.style === "editorial-italic" || quote.style === "handwritten"
+      ? quoteLines.map((l, i) =>
+          `${i === 0 ? "“" : ""}${l}${i === quoteLines.length - 1 ? "”" : ""}`
+        )
+      : quoteLines;
+  decorated.forEach((line, i) => {
+    ctx.fillText(line, x, quoteTop + i * quoteLead);
+  });
+  ctx.restore();
+
+  if (LETTER_SPACING_SUPPORTED) {
+    ctx.letterSpacing = "0em";
   }
 }
 
@@ -1143,7 +1565,9 @@ function createPoster(containerId, options = {}) {
 
       p.randomSeed(seed);
       p.noiseSeed(seed);
-      const spec = layoutSpec(dnaComp(current).layout || current.layout);
+      // Type placement is resolved before the artwork so procedural marks can
+      // protect whichever band the title actually occupies.
+      const spec = typeLayout(current, layoutSpec(dnaComp(current).layout || current.layout));
       if (keyArt) {
         p.background(...hexToRgb(dnaPalette(current).background));
         drawKeyArt(p, keyArt, spec);
@@ -1171,7 +1595,7 @@ function createPoster(containerId, options = {}) {
       }
       p.pop();
       p.blendMode(p.BLEND);
-      drawTypography(p, current, spec);
+      drawTypography(p, current, spec, sampler, seed);
     };
   };
 
@@ -1184,6 +1608,13 @@ function createPoster(containerId, options = {}) {
       role = nextRole || "signature";
       keyArt = image || null;
       p5Instance.redraw();
+      // Canvas text does not trigger webfont loading, so redraw once the exact
+      // weights this DNA asked for have arrived.
+      ensureTypeFaces(params).then((loaded) => {
+        if (loaded && current === params) {
+          p5Instance.redraw();
+        }
+      });
     },
     loadImage(dataUrl) {
       return new Promise((resolve) => {
@@ -1210,4 +1641,16 @@ function createPoster(containerId, options = {}) {
   };
 }
 
-window.FrameFluxPoster = { createPoster, wrapLines, fitTextSize, layoutSpec };
+window.FrameFluxPoster = {
+  createPoster,
+  layoutSpec,
+  typeLayout,
+  titleFace,
+  quoteFace,
+  applyCase,
+  wrapStyled,
+  fitTitleBlock,
+  resolveTitleTreatment,
+  LETTERFORM_FAMILY,
+  QUOTE_STYLE_FACE,
+};

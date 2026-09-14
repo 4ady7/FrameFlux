@@ -220,5 +220,129 @@ foreach ($films as $i => [$title, $genre, $pitch]) {
 expect(count($metaphors) >= 5, 'film matrix yields diverse metaphors');
 expect(count($materials) >= 4, 'film matrix yields diverse materials');
 
+// --- Typography direction + genre visibility (addendum sections 45-50) ---
+
+$typo = normalizeParams([], 'Quiet Wire', 'dystopian thriller', 'A regime listens through every wall.');
+expect($typo['typography']['genreVisibility'] === 'hidden', 'genreVisibility locked to hidden');
+expect(isset($typo['typography']['title']['letterforms']), 'title typography direction present');
+expect(isset($typo['typography']['quote']['style']), 'quote typography direction present');
+expect(
+    in_array($typo['typography']['title']['weight'], FRAMEFLUX_TITLE_WEIGHTS, true),
+    'title weight is a known value'
+);
+expect(
+    in_array($typo['typography']['title']['structure'], FRAMEFLUX_TITLE_STRUCTURES, true),
+    'title structure is a known value'
+);
+expect(
+    in_array($typo['typography']['title']['placement'], FRAMEFLUX_TITLE_PLACEMENTS, true),
+    'title placement is a known value'
+);
+expect(
+    in_array($typo['typography']['quote']['legibility'], FRAMEFLUX_QUOTE_LEGIBILITY, true),
+    'quote legibility is a known value'
+);
+
+// genreVisibility cannot be unlocked by a hostile or confused payload.
+$forced = normalizeParams(
+    ['typography' => ['genreVisibility' => 'visible', 'showGenre' => true]],
+    'T',
+    'G',
+    ''
+);
+expect($forced['typography']['genreVisibility'] === 'hidden', 'genreVisibility cannot be overridden');
+expect(!isset($forced['typography']['showGenre']), 'stray genre display flags stripped');
+
+// Invalid typography enums fall back instead of reaching the renderer.
+$badType = normalizeParams([
+    'titleTypographyDirection' => [
+        'weight' => 'ultra-mega',
+        'case' => 'sPoNgEbOb',
+        'letterforms' => 'comic-sans',
+        'tracking' => 'infinite',
+        'structure' => 'explode',
+        'placement' => 'orbit',
+    ],
+    'quoteTypographyDirection' => ['style' => 'skywriting', 'legibility' => 'telepathy', 'placement' => 'mars'],
+], 'T', 'G', '');
+expect(in_array($badType['typography']['title']['weight'], FRAMEFLUX_TITLE_WEIGHTS, true), 'bad weight rejected');
+expect(in_array($badType['typography']['title']['case'], FRAMEFLUX_TITLE_CASES, true), 'bad case rejected');
+expect(in_array($badType['typography']['title']['letterforms'], FRAMEFLUX_LETTERFORMS, true), 'bad letterforms rejected');
+expect(in_array($badType['typography']['title']['structure'], FRAMEFLUX_TITLE_STRUCTURES, true), 'bad structure rejected');
+expect(in_array($badType['typography']['quote']['style'], FRAMEFLUX_QUOTE_STYLES, true), 'bad quote style rejected');
+expect(in_array($badType['typography']['quote']['legibility'], FRAMEFLUX_QUOTE_LEGIBILITY, true), 'bad quote legibility rejected');
+
+// The quote face must contrast with the title face, never repeat it smaller.
+$pairCases = [
+    ['classical-serif', 'serif'],
+    ['slab-serif', 'serif'],
+    ['geometric-sans', 'sans'],
+    ['grotesque', 'sans'],
+    ['condensed', 'sans'],
+    ['extended', 'sans'],
+    ['technical-stencil', 'sans'],
+    ['hand-lettered', 'script'],
+    ['distressed', 'serif'],
+];
+$pairOk = true;
+foreach ($pairCases as [$letterforms, $expectedCategory]) {
+    $d = normalizeParams([
+        'titleTypographyDirection' => ['letterforms' => $letterforms],
+        // Deliberately ask for a quote face in the same category as the title.
+        'quoteTypographyDirection' => ['style' => $expectedCategory === 'serif' ? 'editorial-italic' : ($expectedCategory === 'script' ? 'handwritten' : 'caption')],
+    ], 'T', 'G', '');
+    $quoteCategory = FRAMEFLUX_QUOTE_STYLE_CATEGORY[$d['typography']['quote']['style']] ?? 'serif';
+    if ($quoteCategory === $expectedCategory) {
+        $pairOk = false;
+        echo "     ({$letterforms} title still paired with {$quoteCategory} quote)\n";
+    }
+}
+expect($pairOk, 'quote face always contrasts with title face category');
+
+// Different stories must produce different title AND quote treatments.
+$tonePairs = [
+    ['Punchline Weather', 'comedy', 'A failed magician invents a weather machine for one joke.'],
+    ['House of Mirrors', 'psychological horror', 'A detective becomes obsessed with reflections that may not exist.'],
+];
+$signatures = [];
+foreach ($tonePairs as $i => [$t, $g, $pi]) {
+    $d = normalizeParams(fallbackVisualParams($t, $g, $pi, 500 + $i, 'generate', null), $t, $g, $pi);
+    $signatures[] = implode('|', $d['typography']['title']) . '#' . implode('|', $d['typography']['quote']);
+}
+expect($signatures[0] !== $signatures[1], 'comedy and psychological horror get different type treatments');
+
+// Across the wider matrix, typography should actually vary.
+$titleSigs = [];
+$quoteSigs = [];
+$structures = [];
+foreach ($films as $i => [$t, $g, $pi]) {
+    $d = normalizeParams(fallbackVisualParams($t, $g, $pi, 700 + $i, 'generate', null), $t, $g, $pi);
+    $titleSigs[implode('|', $d['typography']['title'])] = true;
+    $quoteSigs[$d['typography']['quote']['style']] = true;
+    $structures[$d['typography']['title']['structure']] = true;
+    if ($d['typography']['genreVisibility'] !== 'hidden') {
+        expect(false, "genre stayed hidden for {$t}");
+    }
+}
+expect(count($titleSigs) >= 5, 'film matrix yields varied title treatments');
+expect(count($quoteSigs) >= 3, 'film matrix yields varied quote styles');
+expect(count($structures) >= 3, 'film matrix yields varied title structures');
+
+// Improve keeps the typographic identity; the whitelist must carry it.
+$typeBase = normalizeParams(fallbackVisualParams('Glass Nerve', 'horror', 'Cracked hospital windows.', 8, 'generate', null), 'Glass Nerve', 'horror', 'Cracked hospital windows.');
+$typePrev = whitelistPrevious($typeBase);
+expect(isset($typePrev['titleTypographyDirection']['letterforms']), 'whitelist carries title typography');
+expect(isset($typePrev['quoteTypographyDirection']['style']), 'whitelist carries quote typography');
+
+// Quality notes flag a genre-label regression.
+$notes = assessDnaQuality($typeBase);
+expect(!in_array('genre-visibility-unlocked', $notes, true), 'healthy DNA has no genre-visibility note');
+$broken = $typeBase;
+$broken['typography']['genreVisibility'] = 'visible';
+expect(
+    in_array('genre-visibility-unlocked', assessDnaQuality($broken), true),
+    'a re-added genre label is flagged by the guardrails'
+);
+
 echo $failed === 0 ? "\nAll DNA tests passed.\n" : "\n{$failed} test(s) failed.\n";
 exit($failed === 0 ? 0 : 1);
