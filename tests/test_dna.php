@@ -55,7 +55,7 @@ $valid = normalizeParams([
     'focalY' => 0.4,
 ], 'Night of the Glass River', 'neo-noir', 'A city after midnight.');
 
-expect($valid['schemaVersion'] === '1.2', 'schemaVersion is 1.2');
+expect($valid['schemaVersion'] === '1.3', 'schemaVersion is 1.3');
 expect($valid['procedural']['primaryPattern'] === 'flow', 'valid primary pattern');
 expect($valid['procedural']['secondaryPattern'] === 'rings', 'valid secondary pattern');
 expect($valid['composition']['layout'] === 'centered', 'valid layout');
@@ -556,6 +556,17 @@ $adv = normalizeParams(fallbackVisualParams('The Ochre Map', 'adventure', 'An ex
 expect($adv['semantic']['grammarFamily'] === 'adventure', 'adventure grammar from genre');
 expect(in_array($adv['semantic']['material'], ['leather', 'brass', 'stone', 'paper', 'wood', 'metal'], true), 'adventure uses rugged materials');
 expect(in_array($adv['cinematic']['lighting'], ['chiaroscuro', 'hard-sun', 'shaft', 'harsh'], true), 'adventure uses dramatic light');
+
+expect(in_array($rent['composition']['mode'], COMPOSITION_MODES, true), 'comedy has a composition mode');
+expect(in_array($cape['composition']['mode'], COMPOSITION_MODES, true), 'romance has a composition mode');
+expect(in_array($letters['composition']['mode'], COMPOSITION_MODES, true), 'contemporary has a composition mode');
+expect($rent['composition']['mode'] !== $cape['composition']['mode'] || $cape['composition']['mode'] !== $letters['composition']['mode'], 'example films do not all share one composition mode');
+expect(in_array($rent['semantic']['artFamily'], ART_FAMILIES, true), 'comedy has an art family');
+expect($cape['semantic']['artFamily'] !== 'ordered-grid', 'romance does not default to a technical grid family');
+expect($letters['print']['scanlines'] < $scifi['print']['scanlines'] || $letters['print']['scanlines'] <= 0.2, 'contemporary scan-lines stay quieter than sci-fi');
+expect(isset($rent['print']['registration'], $rent['print']['halftone'], $rent['print']['grain']), 'print profile present');
+expect($improved['composition']['mode'] === $rent['composition']['mode'], 'improve keeps composition mode');
+expect($rent['composition']['negativeSpace'] > 0.15, 'negative space is a designed parameter');
 
 // Quality notes flag a genre-label regression.
 $notes = assessDnaQuality($typeBase);

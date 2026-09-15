@@ -432,9 +432,12 @@ function whitelistPrevious(?array $previous): ?array
         'grammarFamily' => $normalized['semantic']['grammarFamily'],
         'narrativeEnergy' => $normalized['semantic']['narrativeEnergy'],
         'compositionGrammar' => $normalized['composition']['grammar'],
+        'compositionMode' => $normalized['composition']['mode'] ?? null,
+        'artFamily' => $normalized['semantic']['artFamily'] ?? null,
         'proceduralFamily' => $normalized['procedural']['family'],
         'humanElements' => $normalized['semantic']['humanElements'],
         'groundTone' => $normalized['semantic']['groundTone'],
+        'print' => $normalized['print'] ?? null,
     ];
 }
 
@@ -774,6 +777,8 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'humanElements' => $human,
         'groundTone' => $grammar['groundTone'] ?? 'mid',
         'lightingStyle' => pickFromGrammar($grammar['lightingStyles'] ?? FRAMEFLUX_LIGHTING, $seed + 41),
+        'compositionMode' => compositionModeFor($family, $compositionGrammar, $seed + 43),
+        'artFamily' => artFamilyFor($family, $metaphor, $procPrimary, $seed + 47),
     ];
 }
 
@@ -1108,6 +1113,8 @@ function fallbackVisualParams(
             $semantic['spatial']
         );
         $semantic['compositionGrammar'] = pickFromGrammar($grammar['compositionGrammars'] ?? COMPOSITION_GRAMMARS, $seed + 17);
+        $semantic['compositionMode'] = enumValue((string) ($previous['compositionMode'] ?? $semantic['compositionMode'] ?? ''), COMPOSITION_MODES, $semantic['compositionMode'] ?? compositionModeFor($family, $semantic['compositionGrammar'], $seed));
+        $semantic['artFamily'] = enumValue((string) ($previous['artFamily'] ?? $semantic['artFamily'] ?? ''), ART_FAMILIES, $semantic['artFamily'] ?? artFamilyFor($family, $semantic['visualMetaphor'], $semantic['proceduralFamily'] ?? 'organic', $seed));
         $semantic['narrativeEnergy'] = (float) ($previous['narrativeEnergy'] ?? $semantic['narrativeEnergy']);
     }
 
@@ -1123,6 +1130,8 @@ function fallbackVisualParams(
         $semantic['material'] = pickFromGrammar($allowedMaterials, $seed + 4);
         $semantic['spatial'] = pickFromGrammar($grammar['spatialFeelings'] ?? FRAMEFLUX_SPATIAL, $seed + 2);
         $semantic['compositionGrammar'] = pickFromGrammar($grammar['compositionGrammars'] ?? COMPOSITION_GRAMMARS, $seed + 8);
+        $semantic['compositionMode'] = compositionModeFor($family, $semantic['compositionGrammar'], $seed + 13);
+        $semantic['artFamily'] = artFamilyFor($family, $semantic['visualMetaphor'], $semantic['proceduralFamily'] ?? 'organic', $seed + 19);
         $semantic['groundTone'] = $grammar['groundTone'] ?? $semantic['groundTone'];
         $semantic['lightingStyle'] = pickFromGrammar($grammar['lightingStyles'] ?? FRAMEFLUX_LIGHTING, $seed + 41);
         $semantic['lineSemantics'] = pickFromGrammar($grammar['lineSemantics'] ?? FRAMEFLUX_LINE_SEMANTICS, $seed + 9);
@@ -1217,6 +1226,8 @@ function fallbackVisualParams(
         'grammarFamily' => $semantic['grammarFamily'],
         'narrativeEnergy' => $energy,
         'compositionGrammar' => $comp,
+        'compositionMode' => $semantic['compositionMode'] ?? compositionModeFor((string) $semantic['grammarFamily'], $comp, $seed),
+        'artFamily' => $semantic['artFamily'] ?? artFamilyFor((string) $semantic['grammarFamily'], (string) $semantic['visualMetaphor'], (string) ($semantic['proceduralFamily'] ?? 'organic'), $seed),
         'proceduralFamily' => $semantic['proceduralFamily'] ?? 'organic',
         'proceduralSecondaryFamily' => $semantic['proceduralSecondaryFamily'] ?? 'tactile',
         'proceduralAccent' => $semantic['proceduralAccent'] ?? 'particle',
@@ -1374,6 +1385,25 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         COMPOSITION_GRAMMARS,
         $inferred['compositionGrammar'] ?? 'central'
     );
+    $compositionMode = enumValue(
+        (string) ($compositionIn['mode'] ?? $params['compositionMode'] ?? $inferred['compositionMode'] ?? ''),
+        COMPOSITION_MODES,
+        $inferred['compositionMode'] ?? compositionModeFor($family, $compositionGrammar, abs(crc32($title)))
+    );
+    $artFamily = enumValue(
+        (string) ($semanticIn['artFamily'] ?? $params['artFamily'] ?? $inferred['artFamily'] ?? ''),
+        ART_FAMILIES,
+        $inferred['artFamily'] ?? artFamilyFor($family, (string) ($inferred['visualMetaphor'] ?? ''), $inferred['proceduralFamily'] ?? 'organic', abs(crc32($title . '|art')))
+    );
+    $printIn = is_array($params['print'] ?? null) ? $params['print'] : [];
+    $printDefaults = printProfileFor($family, (float) ($params['narrativeEnergy'] ?? $inferred['narrativeEnergy'] ?? 0.5));
+    $print = [
+        'registration' => round(clamp((float) ($printIn['registration'] ?? $printDefaults['registration']), 0.05, 0.8), 2),
+        'halftone' => round(clamp((float) ($printIn['halftone'] ?? $printDefaults['halftone']), 0.05, 0.8), 2),
+        'scanlines' => round(clamp((float) ($printIn['scanlines'] ?? $printDefaults['scanlines']), 0.0, 0.6), 2),
+        'grain' => round(clamp((float) ($printIn['grain'] ?? $printDefaults['grain']), 0.15, 0.9), 2),
+    ];
+    $negativeSpace = round(clamp((float) ($compositionIn['negativeSpace'] ?? $params['negativeSpace'] ?? $printDefaults['negativeSpace']), 0.15, 0.85), 2);
     $proceduralFamily = enumValue(
         (string) ($proceduralIn['family'] ?? $params['proceduralFamily'] ?? $inferred['proceduralFamily'] ?? ''),
         PROCEDURAL_FAMILIES,
@@ -1521,7 +1551,7 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
     ];
 
     return [
-        'schemaVersion' => '1.2',
+        'schemaVersion' => '1.3',
         'concept' => [
             'title' => $title,
             'genre' => $genre,
@@ -1543,6 +1573,7 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
             'narrativeEnergy' => $narrativeEnergy,
             'humanElements' => $humanElements,
             'groundTone' => $groundTone,
+            'artFamily' => $artFamily,
         ],
         'cinematic' => [
             'subject' => clipText((string) ($cinematicIn['subject'] ?? str_replace('-', ' ', $narrativeAnchor)), 80, str_replace('-', ' ', $narrativeAnchor)),
@@ -1565,9 +1596,11 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         'composition' => [
             'layout' => $layout,
             'grammar' => $compositionGrammar,
+            'mode' => $compositionMode,
             'focalX' => $focalX,
             'focalY' => $focalY,
             'anchorScale' => $anchorScale,
+            'negativeSpace' => $negativeSpace,
         ],
         'procedural' => [
             'primaryPattern' => $primary,
@@ -1587,6 +1620,7 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
             'direction' => $lightDirection,
             'shadowDensity' => $shadowDensity,
         ],
+        'print' => $print,
         'anchors' => [
             'protectTitle' => true,
             'protectSubject' => true,
@@ -1665,6 +1699,9 @@ function dnaShapePrompt(): string
   "grammarFamily": "comedy" | "romance" | "adventure" | "contemporary" | "drama" | "thriller" | "scifi" | "horror" | "fantasy" | "mystery" | "historical" | "coming-of-age" | "documentary" | "musical" | "animation" | "family",
   "narrativeEnergy": number 0.1-0.95,
   "compositionGrammar": "asymmetric" | "central" | "editorial" | "diagonal" | "layered" | "expansive" | "minimal" | "crowded" | "organic",
+  "compositionMode": "central-focus" | "editorial" | "split-field" | "framed-object" | "type-dominant" | "edge-flow" | "diagonal" | "quiet-minimal",
+  "artFamily": "angular" | "organic" | "particles" | "ordered-grid" | "radial" | "topographic" | "pattern",
+  "print": { "registration": number 0-1, "halftone": number 0-1, "scanlines": number 0-1, "grain": number 0-1 },
   "proceduralFamily": "organic" | "geometric" | "tactile" | "chaotic" | "atmospheric" | "editorial" | "topographic" | "material" | "linear" | "particle",
   "humanElements": "none" | "silhouette" | "hands" | "letter" | "tickets" | "cups" | "paired-objects" | "signage" | "map",
   "groundTone": "light" | "mid" | "dark",

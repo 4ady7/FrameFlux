@@ -55,6 +55,27 @@ const COMPOSITION_GRAMMARS = [
     'organic',
 ];
 
+const COMPOSITION_MODES = [
+    'central-focus',
+    'editorial',
+    'split-field',
+    'framed-object',
+    'type-dominant',
+    'edge-flow',
+    'diagonal',
+    'quiet-minimal',
+];
+
+const ART_FAMILIES = [
+    'angular',
+    'organic',
+    'particles',
+    'ordered-grid',
+    'radial',
+    'topographic',
+    'pattern',
+];
+
 /**
  * Map a user-facing genre label onto a visual-grammar family.
  */
@@ -604,6 +625,84 @@ function isTechFamily(string $family): bool
 
 const FRAMEFLUX_TECH_PATTERNS = ['grid', 'mesh'];
 const FRAMEFLUX_TECH_LINES = ['circuitry', 'wiring'];
+
+/**
+ * Architectural composition mode — varies by family so posters do not share
+ * one title-top / frame-center / quote-bottom template.
+ */
+function compositionModeFor(string $family, string $grammar, int $seed): string
+{
+    $allowed = match ($family) {
+        'comedy' => ['diagonal', 'type-dominant', 'editorial', 'central-focus'],
+        'romance' => ['quiet-minimal', 'central-focus', 'editorial'],
+        'contemporary' => ['editorial', 'split-field', 'quiet-minimal'],
+        'adventure' => ['edge-flow', 'framed-object', 'central-focus'],
+        'horror' => ['framed-object', 'split-field', 'diagonal'],
+        'scifi', 'thriller' => ['framed-object', 'edge-flow', 'split-field'],
+        'family' => ['quiet-minimal', 'editorial', 'central-focus'],
+        'historical' => ['editorial', 'quiet-minimal', 'framed-object'],
+        'coming-of-age' => ['quiet-minimal', 'editorial', 'central-focus'],
+        default => ['central-focus', 'editorial', 'framed-object', 'quiet-minimal'],
+    };
+    $bias = match ($grammar) {
+        'editorial', 'minimal' => 'editorial',
+        'diagonal' => 'diagonal',
+        'organic', 'expansive' => 'quiet-minimal',
+        'crowded', 'asymmetric' => 'type-dominant',
+        'layered' => 'split-field',
+        'central' => 'central-focus',
+        default => null,
+    };
+    if ($bias !== null && in_array($bias, $allowed, true)) {
+        return $bias;
+    }
+    return $allowed[abs($seed) % count($allowed)];
+}
+
+function artFamilyFor(string $family, string $metaphor, string $procFamily, int $seed): string
+{
+    $fromMetaphor = match ($metaphor) {
+        'chaotic-key', 'chandelier-cluster', 'tangled-cords' => 'radial',
+        'coastal-compass', 'compass-rose', 'weathered-door' => 'topographic',
+        'handwritten-letter', 'correspondence-clock', 'postcard', 'railway-route' => 'pattern',
+        'map-fold' => 'topographic',
+        'fractured-glass', 'distorted-reflection' => 'angular',
+        'orbital-system', 'signal', 'maze' => 'ordered-grid',
+        'tangled-roots', 'biological-cell' => 'organic',
+        'eclipse' => 'radial',
+        default => null,
+    };
+    $allowed = match ($family) {
+        'comedy' => ['radial', 'pattern', 'particles'],
+        'romance' => ['organic', 'topographic', 'pattern'],
+        'contemporary' => ['pattern', 'topographic', 'organic'],
+        'adventure' => ['topographic', 'angular', 'organic'],
+        'horror' => ['angular', 'particles', 'radial'],
+        'scifi', 'thriller' => ['ordered-grid', 'angular', 'radial'],
+        'family' => ['organic', 'pattern', 'radial'],
+        'historical' => ['topographic', 'pattern', 'organic'],
+        default => ['organic', 'topographic', 'angular', 'pattern'],
+    };
+    if ($fromMetaphor !== null && in_array($fromMetaphor, $allowed, true)) {
+        return $fromMetaphor;
+    }
+    if (in_array($procFamily, $allowed, true)) {
+        return $procFamily;
+    }
+    return $allowed[abs($seed + 11) % count($allowed)];
+}
+
+function printProfileFor(string $family, float $energy): array
+{
+    $quiet = in_array($family, ['romance', 'contemporary', 'drama', 'family', 'coming-of-age', 'historical'], true);
+    return [
+        'registration' => $quiet ? 0.22 : ($family === 'comedy' ? 0.55 : 0.38),
+        'halftone' => $quiet ? 0.28 : 0.42,
+        'scanlines' => in_array($family, ['scifi', 'thriller', 'horror'], true) ? 0.35 : 0.12,
+        'grain' => $family === 'historical' ? 0.7 : ($quiet ? 0.4 : 0.5),
+        'negativeSpace' => round(max(0.18, min(0.82, ($quiet ? 0.62 : 0.38) - $energy * 0.18)), 2),
+    ];
+}
 
 function layoutForComposition(string $grammar, int $seed, string $family = 'drama'): string
 {
