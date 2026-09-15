@@ -176,6 +176,7 @@
       titleSafe: plan.titleSafe,
       quoteAnchor: (plan.quote.y + 10) / H,
       quoteBox: plan.quote,
+      quoteSafe: plan.quoteSafe,
       titlePlacement: plan.title.placement,
       frame: plan.frame,
       status: plan.status,
