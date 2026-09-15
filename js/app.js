@@ -68,8 +68,9 @@ function showMeta(dna) {
   document.querySelector("#meta-pattern").textContent =
     `${proc.primaryPattern || dna.pattern} / ${proc.secondaryPattern || "–"}`;
   document.querySelector("#meta-layout").textContent =
-    `${(dna.composition && dna.composition.layout) || dna.layout}` +
-    (semantic.grammarFamily ? ` · ${semantic.grammarFamily}` : "");
+    `${(dna.composition && dna.composition.mode) || (dna.composition && dna.composition.layout) || dna.layout}` +
+    (semantic.grammarFamily ? ` · ${semantic.grammarFamily}` : "") +
+    (semantic.artFamily ? ` · ${semantic.artFamily}` : "");
   const sourceLabel = dna.source === "ai" ? "AI DNA" : "local DNA";
   const art = keyArt ? " · cinematic still" : " · local plate";
   document.querySelector("#meta-source").textContent = sourceLabel + art;

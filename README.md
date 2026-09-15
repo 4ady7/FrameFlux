@@ -49,6 +49,12 @@ Procedural families include organic flow, chaotic cords, atmospheric haze, edito
 
 Centered, off-center top, off-center bottom, split editorial, and frame inset. Frame inset is reserved for claustrophobic tech stories so human genres are not forced into the same sterile void.
 
+Architectural **composition modes** (central-focus, editorial, split-field, framed-object, type-dominant, edge-flow, diagonal, quiet-minimal) snap title, quote, frame, and archive marks to a 12-column grid. Story DNA chooses the mode; regenerate only varies execution inside it.
+
+## Print and topography
+
+Posters share a FrameFlux print identity: atmospheric topography shade, contour field, translucent central frame, connecting lines, analog registration, halftone, grain, and faint scan-lines. Saturation, metaphor, and art family still come from the story so comedy does not become cyber and romance does not become a glitch plate.
+
 ## Typography
 
 Title and quote are separate art-directed decisions in the Visual DNA, derived from the story rather than the genre.

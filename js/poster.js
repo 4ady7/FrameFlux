@@ -301,7 +301,10 @@ function fitTitleBlock(ctx, face, text, maxWidth, maxSize, minSize) {
  * the focal mass, so type lands in negative space rather than a fixed slot.
  * Returns an extended spec; titleSafe is updated so procedural marks stay clear.
  */
-function typeLayout(dna, spec) {
+function typeLayout(dna, spec, plan) {
+  if (plan) {
+    return window.FrameFluxSystems.specFromPlan(spec, plan);
+  }
   const face = titleFace(dna);
   const quote = quoteFace(dna);
   const focalY = Number(dnaComp(dna).focalY ?? 0.42);
@@ -1216,8 +1219,9 @@ function drawCinematicPlate(p, dna, seed, spec) {
   const bg = hexToRgb(pal.background);
   const primary = hexToRgb(pal.primary);
   const secondary = hexToRgb(pal.secondary);
-  const fx = Number(dnaComp(dna).focalX ?? 0.5);
-  const fy = Number(dnaComp(dna).focalY ?? 0.42);
+  const plan = spec.plan;
+  const fx = plan ? plan.focalX : Number(dnaComp(dna).focalX ?? 0.5);
+  const fy = plan ? plan.focalY : Number(dnaComp(dna).focalY ?? 0.42);
   const material = semantic.material || "paper";
   const spatial = semantic.spatial || "isolated";
   const family = grammarFamily(dna);
@@ -1225,6 +1229,12 @@ function drawCinematicPlate(p, dna, seed, spec) {
   p.background(...bg);
   p.noiseSeed(seed);
   p.randomSeed(seed);
+
+  if (window.FrameFluxSystems) {
+    window.FrameFluxSystems.drawTopographyShade(p, dna, seed, plan || {});
+    window.FrameFluxSystems.drawContourField(p, dna, seed, plan || spec);
+    window.FrameFluxSystems.drawCentralFrame(p, dna, seed, plan || {});
+  }
 
   const horizon =
     spatial === "rising" || spatial === "expanding"
@@ -1237,22 +1247,23 @@ function drawCinematicPlate(p, dna, seed, spec) {
             ? 0.58
             : 0.52;
 
-  // Atmospheric depth bands — background → mid → foreground wash.
-  p.noStroke();
-  for (let y = 0; y < POSTER_H; y += 3) {
-    const t = y / POSTER_H;
-    const sky = t < horizon;
-    const mix = sky ? t / horizon : (t - horizon) / (1 - horizon);
-    const a = sky ? bg : primary;
-    const b = sky ? secondary : bg;
-    const depth = sky ? 55 : 75;
-    p.fill(
-      a[0] + (b[0] - a[0]) * mix,
-      a[1] + (b[1] - a[1]) * mix,
-      a[2] + (b[2] - a[2]) * mix,
-      depth
-    );
-    p.rect(0, y, POSTER_W, 4);
+  if (!window.FrameFluxSystems) {
+    p.noStroke();
+    for (let y = 0; y < POSTER_H; y += 3) {
+      const t = y / POSTER_H;
+      const sky = t < horizon;
+      const mixAmt = sky ? t / horizon : (t - horizon) / (1 - horizon);
+      const a = sky ? bg : primary;
+      const b = sky ? secondary : bg;
+      const depth = sky ? 55 : 75;
+      p.fill(
+        a[0] + (b[0] - a[0]) * mixAmt,
+        a[1] + (b[1] - a[1]) * mixAmt,
+        a[2] + (b[2] - a[2]) * mixAmt,
+        depth
+      );
+      p.rect(0, y, POSTER_W, 4);
+    }
   }
 
   // Mid-ground haze / material atmosphere before the anchor.
@@ -1267,7 +1278,9 @@ function drawCinematicPlate(p, dna, seed, spec) {
     p.drawingContext.restore();
   }
 
-  drawDirectionalLight(p, dna, seed, fx, fy);
+  if (!window.FrameFluxSystems) {
+    drawDirectionalLight(p, dna, seed, fx, fy);
+  }
   drawNarrativeAnchor(p, dna, seed, fx, fy);
 
   drawMaterialGrain(p, dna, seed, materialEmphasis(dna, seed));
@@ -1296,6 +1309,7 @@ function drawCinematicPlate(p, dna, seed, spec) {
     p.endShape();
   }
 
+  if (!window.FrameFluxSystems) {
   const shadow = Number(dnaLight(dna).shadowDensity ?? 0.55);
   p.drawingContext.save();
   const vig = p.drawingContext.createRadialGradient(
@@ -1316,6 +1330,7 @@ function drawCinematicPlate(p, dna, seed, spec) {
   p.drawingContext.fillStyle = vig;
   p.drawingContext.fillRect(0, 0, POSTER_W, POSTER_H);
   p.drawingContext.restore();
+  }
 }
 
 function drawKeyArt(p, img, spec) {
@@ -1831,9 +1846,12 @@ function drawTitleLine(p, ctx, line, x, y, size, face, treatment, colors, light)
     return;
   }
 
-  // Solid, with a faint rim pickup on the lit side so type belongs to the scene.
-  ctx.fillStyle = `rgba(${highlight.join(",")},0.35)`;
-  ctx.fillText(line, x + (light.x > 0.5 ? -1.2 : 1.2), y - 1);
+  // Solid, with analog registration drift rather than RGB glitch.
+  const drift = 1.1 + (p.random() - 0.5) * 0.8;
+  ctx.fillStyle = `rgba(${accent.join(",")},0.32)`;
+  ctx.fillText(line, x + drift, y + 0.7);
+  ctx.fillStyle = `rgba(${highlight.join(",")},0.28)`;
+  ctx.fillText(line, x - drift * 0.4, y - 0.6);
   ctx.fillStyle = `rgb(${text.join(",")})`;
   ctx.fillText(line, x, y);
 }
@@ -1871,8 +1889,8 @@ function drawTypography(p, dna, spec, sampler, seed) {
   const light = lightOrigin(dna, seed);
 
   const isSplitColumn = spec.id === "split-editorial";
-  const maxTitleWidth = isSplitColumn ? POSTER_W * 0.4 : POSTER_W * 0.8;
-  const quoteWidth = isSplitColumn ? POSTER_W * 0.36 : POSTER_W * 0.72;
+  const maxTitleWidth = spec.plan ? spec.plan.title.w : isSplitColumn ? POSTER_W * 0.4 : POSTER_W * 0.8;
+  const quoteWidth = spec.quoteBox ? spec.quoteBox.w : isSplitColumn ? POSTER_W * 0.36 : POSTER_W * 0.72;
   const titleText = applyCase(dna.concept?.title || dna.title || "", face.case);
 
   // Scale from length and safe width, never a fixed size.
@@ -1888,9 +1906,13 @@ function drawTypography(p, dna, spec, sampler, seed) {
   const lineHeight = titleSize * (face.letterforms === "hand-lettered" ? 0.92 : 1.06);
   const titleH = titleLines.length * lineHeight;
 
-  const align = ctxAlign(spec.align);
-  const x = nx(spec.title.x);
-  const titleTop = ny(spec.title.y) - titleH / 2;
+  const align = ctxAlign(spec.plan ? spec.plan.title.align : spec.align);
+  const x = spec.plan
+    ? spec.plan.title.align === "center"
+      ? spec.plan.title.x + spec.plan.title.w / 2
+      : spec.plan.title.x
+    : nx(spec.title.x);
+  const titleTop = spec.plan ? spec.plan.title.y : ny(spec.title.y) - titleH / 2;
 
   const titleRect = {
     x: Math.max(0, (align === "center" ? x - maxTitleWidth / 2 : x) / POSTER_W),
@@ -1940,17 +1962,24 @@ function drawTypography(p, dna, spec, sampler, seed) {
   const quoteH = quoteLines.length * quoteLead;
 
   let quoteTop;
-  if (spec.quoteAnchor === null || spec.quoteAnchor === undefined) {
+  if (spec.quoteBox) {
+    quoteTop = spec.quoteBox.y;
+  } else if (spec.quoteAnchor === null || spec.quoteAnchor === undefined) {
     quoteTop = titleTop + titleH + Math.max(14, titleSize * 0.34);
   } else {
     quoteTop = ny(spec.quoteAnchor) - quoteH / 2;
   }
-  // Stay inside the safe margins regardless of style.
-  const bottomLimit = POSTER_H - (spec.inset > 0 ? spec.inset * POSTER_W * 1.9 : 34) - quoteH;
-  quoteTop = Math.max(28, Math.min(quoteTop, bottomLimit));
+  const outerMargin = window.FrameFluxSystems ? window.FrameFluxSystems.MARGIN : 34;
+  const bottomLimit = POSTER_H - (spec.inset > 0 ? spec.inset * POSTER_W * 1.9 : outerMargin) - quoteH;
+  quoteTop = Math.max(outerMargin, Math.min(quoteTop, bottomLimit));
+  const quoteX = spec.quoteBox
+    ? spec.quoteBox.align === "center"
+      ? spec.quoteBox.x + spec.quoteBox.w / 2
+      : spec.quoteBox.x
+    : x;
 
   const quoteRect = {
-    x: Math.max(0, (align === "center" ? x - quoteWidth / 2 : x) / POSTER_W),
+    x: Math.max(0, (spec.quoteBox ? spec.quoteBox.x : align === "center" ? x - quoteWidth / 2 : x) / POSTER_W),
     y: quoteTop / POSTER_H,
     w: quoteWidth / POSTER_W,
     h: Math.max(0.02, quoteH / POSTER_H),
@@ -1971,6 +2000,9 @@ function drawTypography(p, dna, spec, sampler, seed) {
     technique = "plate";
   }
 
+  if (isLightGround(dna) && (technique === "plate" || technique === "scrim")) {
+    technique = "none";
+  }
   const measuredWidest = Math.max(
     ...quoteLines.map((l) => measureStyled(ctx, quoteFaceSpec, quoteSize, l)),
     0
@@ -1979,7 +2011,13 @@ function drawTypography(p, dna, spec, sampler, seed) {
     const padX = 14;
     const padY = 10;
     const plateX =
-      align === "center" ? x - measuredWidest / 2 - padX : align === "right" ? x - measuredWidest - padX : x - padX;
+      spec.quoteBox
+        ? spec.quoteBox.x - padX
+        : align === "center"
+          ? x - measuredWidest / 2 - padX
+          : align === "right"
+            ? x - measuredWidest - padX
+            : x - padX;
     drawQuotePlate(
       p.drawingContext,
       { x: plateX, y: quoteTop - padY, w: measuredWidest + padX * 2, h: quoteH + padY * 1.6 },
@@ -1990,7 +2028,7 @@ function drawTypography(p, dna, spec, sampler, seed) {
   }
 
   ctx.save();
-  ctx.textAlign = align;
+  ctx.textAlign = spec.quoteBox ? "left" : align;
   ctx.textBaseline = "top";
   styleCtx(ctx, quoteFaceSpec, quoteSize);
   if (technique === "shadow") {
@@ -2006,7 +2044,7 @@ function drawTypography(p, dna, spec, sampler, seed) {
         )
       : quoteLines;
   decorated.forEach((line, i) => {
-    ctx.fillText(line, x, quoteTop + i * quoteLead);
+    ctx.fillText(line, quoteX, quoteTop + i * quoteLead);
   });
   ctx.restore();
 
@@ -2070,24 +2108,29 @@ function createPoster(containerId, options = {}) {
 
       p.randomSeed(seed);
       p.noiseSeed(seed);
-      // Type placement is resolved before the artwork so procedural marks can
-      // protect whichever band the title actually occupies.
-      const spec = typeLayout(current, layoutSpec(dnaComp(current).layout || current.layout));
+      const grid = window.FrameFluxSystems ? window.FrameFluxSystems.makeGrid() : null;
+      const plan = window.FrameFluxSystems ? window.FrameFluxSystems.compositionPlan(current, seed, grid) : null;
+      const spec = typeLayout(current, layoutSpec(dnaComp(current).layout || current.layout), plan);
       if (keyArt) {
         p.background(...hexToRgb(dnaPalette(current).background));
         drawKeyArt(p, keyArt, spec);
-        // Material grain still sits on top of photographic plates for tactility.
-        drawMaterialGrain(p, current, seed, materialEmphasis(current, seed) * 0.55);
-        drawDirectionalLight(p, current, seed, Number(dnaComp(current).focalX ?? 0.5), Number(dnaComp(current).focalY ?? 0.42));
+        if (window.FrameFluxSystems) {
+          window.FrameFluxSystems.drawTopographyShade(p, current, seed, plan);
+          window.FrameFluxSystems.drawContourField(p, current, seed, plan);
+          window.FrameFluxSystems.drawCentralFrame(p, current, seed, plan);
+        }
+        drawMaterialGrain(p, current, seed, materialEmphasis(current, seed) * 0.35);
       } else {
         drawCinematicPlate(p, current, seed, spec);
       }
       finishFrame(p, current, spec);
       const sampler = buildSampler(p);
       const intensity = Number(dnaProc(current).intensity || 0.55);
+      const air = Number(dnaComp(current).negativeSpace ?? 0.5);
       p.push();
       p.blendMode(p.BLEND);
       for (const layer of patternPlan(current, role)) {
+        const quiet = spec.mode === "quiet-minimal" ? 0.45 : 1;
         drawPattern(
           p,
           layer.name,
@@ -2095,12 +2138,21 @@ function createPoster(containerId, options = {}) {
           seed + layer.seedShift,
           sampler,
           spec,
-          layer.weight * (0.85 + intensity * 0.35)
+          layer.weight * (0.55 + intensity * 0.25) * quiet * (1.05 - air * 0.35)
         );
       }
       p.pop();
       p.blendMode(p.BLEND);
+      if (window.FrameFluxSystems) {
+        window.FrameFluxSystems.drawConnectionLines(p, current, seed, plan, spec);
+        window.FrameFluxSystems.drawStatusColumn(p, current, seed, plan);
+      }
       drawTypography(p, current, spec, sampler, seed);
+      if (window.FrameFluxSystems) {
+        window.FrameFluxSystems.drawRefLabel(p, current, seed, plan);
+        const afterType = buildSampler(p);
+        window.FrameFluxSystems.drawPrintFinish(p, current, seed, afterType);
+      }
     };
   };
 
