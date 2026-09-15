@@ -2000,6 +2000,9 @@ function drawTypography(p, dna, spec, sampler, seed) {
     technique = "plate";
   }
 
+  if (isLightGround(dna) && (technique === "plate" || technique === "scrim")) {
+    technique = "none";
+  }
   const measuredWidest = Math.max(
     ...quoteLines.map((l) => measureStyled(ctx, quoteFaceSpec, quoteSize, l)),
     0

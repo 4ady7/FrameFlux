@@ -110,8 +110,8 @@
       plan.ref = { x: g.col(8, 4).x, y: headerY + 4, w: g.col(8, 4).w };
     } else if (mode === "type-dominant") {
       plan.title = { x: g.col(0, 12).x, y: headerY + 10, w: g.col(0, 12).w, align: "left", placement: "upper-third" };
-      plan.frame = { x: g.col(6, 6).x, y: 340 + nudge, w: g.col(6, 6).w, h: 320 };
-      plan.quote = { x: g.col(0, 7).x, y: 420, w: g.col(0, 7).w, align: "left" };
+      plan.frame = { x: g.col(7, 5).x, y: 300 + nudge, w: g.col(7, 5).w, h: 340 };
+      plan.quote = { x: g.col(0, 6).x, y: footerY, w: g.col(0, 6).w, align: "left" };
       plan.status = { x: g.col(10, 2).x, y: 700, w: g.col(10, 2).w, h: 120 };
     } else if (mode === "edge-flow") {
       plan.title = { x: g.col(1, 10).x, y: footerY - 20, w: g.col(1, 10).w, align: "left", placement: "lower-third" };
@@ -250,7 +250,8 @@
         const u = x / W;
         const v = y / H;
         const inTitle = u > plan.titleSafe.x && u < plan.titleSafe.x + plan.titleSafe.w && v > plan.titleSafe.y && v < plan.titleSafe.y + plan.titleSafe.h;
-        if (inTitle || y < MARGIN || y > H - MARGIN) {
+        const inQuote = plan.quoteSafe && u > plan.quoteSafe.x && u < plan.quoteSafe.x + plan.quoteSafe.w && v > plan.quoteSafe.y && v < plan.quoteSafe.y + plan.quoteSafe.h;
+        if (inTitle || inQuote || y < MARGIN || y > H - MARGIN) {
           if (drawing) {
             p.endShape();
             drawing = false;
@@ -363,6 +364,10 @@
         }
         const u = x / W;
         const v = y / H;
+        if (spec?.quoteSafe && u > spec.quoteSafe.x && u < spec.quoteSafe.x + spec.quoteSafe.w && v > spec.quoteSafe.y && v < spec.quoteSafe.y + spec.quoteSafe.h) {
+          p.endShape();
+          p.beginShape();
+        }
         if (spec?.titleSafe && u > spec.titleSafe.x && u < spec.titleSafe.x + spec.titleSafe.w && v > spec.titleSafe.y && v < spec.titleSafe.y + spec.titleSafe.h * 0.7) {
           p.endShape();
           p.beginShape();
