@@ -100,6 +100,7 @@ expect($legacy2['layout'] === 'off-center-bottom', 'billing aliases to off-cente
 $long = normalizeParams(['mood' => str_repeat('m', 200), 'quote' => str_repeat('q', 400)], 'T', 'G', '');
 expect(mb_strlen($long['mood']) <= 80, 'mood clipped');
 expect(mb_strlen($long['quote']) <= 120, 'quote clipped');
+expect(quoteWordCount($long['quote']) <= 12, 'quote is at most 12 words');
 
 $unexpected = normalizeParams(['pattern' => 'grid', 'hack' => 'rm -rf', 'javascript' => 'alert(1)'], 'T', 'G', '');
 expect(!isset($unexpected['hack']), 'unexpected fields stripped');
@@ -577,6 +578,195 @@ expect(
     in_array('genre-visibility-unlocked', assessDnaQuality($broken), true),
     'a re-added genre label is flagged by the guardrails'
 );
+
+// --- Nested Visual DNA v1.3 contract (single semantic source of truth) ---
+
+$shape = dnaShapePrompt();
+expect(str_contains($shape, '"schemaVersion": "1.3"'), 'AI shape is schema 1.3');
+expect(str_contains($shape, '"grammarFamily"'), 'AI shape nests semantic fields');
+expect(str_contains($shape, '"genreVisibility": "hidden"'), 'AI shape locks genreVisibility');
+expect(!str_contains($shape, 'titleTypographyDirection'), 'AI shape does not use legacy type keys');
+expect(!str_contains($shape, 'Signature'), 'AI shape is a single DNA, not three roles');
+
+$wordy = normalizeParams([
+    'quote' => 'This tagline has far too many words for a poster and must be trimmed down immediately now',
+], 'T', 'Drama', '');
+expect(quoteWordCount($wordy['concept']['quote']) <= 12, 'long tagline clipped to 12 words');
+$wordyWords = preg_split('/\s+/', trim($wordy['concept']['quote']), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+$wordyLast = strtolower(rtrim((string) end($wordyWords), '.,;:!?')) ;
+expect(!in_array($wordyLast, FRAMEFLUX_DANGLING_WORDS, true), 'clipped tagline does not dangle');
+
+$misaligned = normalizeParams([
+    'semantic' => [
+        'visualMetaphor' => 'chaotic-key',
+        'narrativeAnchor' => 'coastal-compass',
+        'grammarFamily' => 'comedy',
+        'groundTone' => 'light',
+        'material' => 'paper',
+        'texture' => 'glossy',
+        'spatial' => 'fragmented',
+        'particleSemantics' => 'confetti',
+        'lineSemantics' => 'cords',
+        'humanElements' => 'paired-objects',
+        'artFamily' => 'radial',
+        'emotionalCore' => 'playfulness',
+        'narrativeCore' => 'identity',
+    ],
+], 'Rent-A-Mansion', 'Workplace Comedy', 'A farce about keys.');
+expect($misaligned['semantic']['narrativeAnchor'] === $misaligned['semantic']['visualMetaphor'], 'narrativeAnchor is forced equal to visualMetaphor');
+expect($misaligned['semantic']['visualMetaphor'] === 'chaotic-key', 'supplied metaphor is kept when valid');
+
+$nestedSubject = 'A cinematic still photograph of a chaotic brass key ring bursting from a cracked porcelain dish on a sunlit table, paper dust hanging in the air, no posed portrait';
+$nested = normalizeParams([
+    'schemaVersion' => '1.3',
+    'concept' => [
+        'title' => 'Rent-A-Mansion',
+        'genre' => 'Workplace Comedy',
+        'pitch' => 'Eccentric tenants compete for a crumbling luxury house they cannot afford.',
+        'mood' => 'sunlit farce of keys and access',
+        'quote' => 'The spare key never opened the right door.',
+    ],
+    'semantic' => [
+        'grammarFamily' => 'comedy',
+        'emotionalCore' => 'playfulness',
+        'narrativeCore' => 'identity',
+        'visualMetaphor' => 'chaotic-key',
+        'narrativeAnchor' => 'chaotic-key',
+        'material' => 'paper',
+        'texture' => 'glossy',
+        'spatial' => 'fragmented',
+        'particleSemantics' => 'confetti',
+        'lineSemantics' => 'cords',
+        'humanElements' => 'paired-objects',
+        'groundTone' => 'light',
+        'artFamily' => 'radial',
+    ],
+    'cinematic' => [
+        'subject' => $nestedSubject,
+        'environment' => 'A sunlit, slightly chaotic interior with paper clutter and generous empty floor around the object',
+        'lighting' => 'high-key',
+        'atmosphere' => 'paper dust in still air',
+        'camera' => 'wide',
+    ],
+    'palette' => [
+        'background' => '#F4EFE4',
+        'primary' => '#E11D74',
+        'secondary' => '#2BB3B1',
+        'accent' => '#E11D74',
+        'text' => '#1A1410',
+        'highlight' => '#C6FF3D',
+    ],
+    'composition' => [
+        'mode' => 'type-dominant',
+        'negativeSpace' => 0.42,
+    ],
+    'procedural' => [
+        'primaryPattern' => 'flow',
+        'secondaryPattern' => 'particles',
+        'density' => 0.62,
+    ],
+    'typography' => [
+        'genreVisibility' => 'hidden',
+        'title' => [
+            'weight' => 'black',
+            'case' => 'mixed',
+            'letterforms' => 'extended',
+            'structure' => 'layered',
+            'placement' => 'upper-third',
+        ],
+        'quote' => [
+            'style' => 'typewriter',
+            'legibility' => 'plate',
+            'placement' => 'below-title',
+        ],
+    ],
+], 'Rent-A-Mansion', 'Workplace Comedy', 'Eccentric tenants compete for a crumbling luxury house they cannot afford.');
+
+expect($nested['warnings'] === [], 'nested v1.3 comedy DNA has zero avoidable fallbacks');
+expect($nested['schemaVersion'] === '1.3', 'nested object stays on schema 1.3');
+expect($nested['semantic']['narrativeAnchor'] === 'chaotic-key', 'nested narrativeAnchor preserved');
+expect($nested['composition']['mode'] === 'type-dominant', 'nested composition.mode preserved');
+expect($nested['composition']['layout'] !== 'centered', 'omitted layout is derived from composition.mode, not default centered');
+expect(
+    in_array($nested['composition']['layout'], ['off-center-top', 'off-center-bottom'], true),
+    'comedy type-dominant maps to a full-width off-center layout'
+);
+expect($nested['typography']['genreVisibility'] === 'hidden', 'nested genreVisibility stays hidden');
+expect(mb_strlen($nested['cinematic']['subject']) > 80, 'cinematic subject is not clipped to 80 characters');
+expect(str_contains($nested['cinematic']['subject'], 'brass key ring'), 'production-length cinematic subject is kept');
+expect(quoteWordCount($nested['concept']['quote']) <= 12, 'nested quote stays within 12 words');
+expect($nested['concept']['title'] === 'Rent-A-Mansion', 'supplied title is copied exactly');
+expect($nested['concept']['genre'] === 'Workplace Comedy', 'user-facing genre is not replaced by grammarFamily');
+expect(!in_array('cinematic-plate-has-typography', assessDnaQuality($nested), true), 'textless nested plate is clean');
+
+$stripped = ensureTextlessPlate(
+    'A brass key on a sunlit table. Place the movie poster title in the upper third.',
+    'fallback plate'
+);
+expect(str_contains($stripped, 'brass key'), 'textless filter keeps the physical subject');
+expect(!str_contains(strtolower($stripped), 'movie poster'), 'textless filter drops poster-copy instructions');
+
+expect(layoutFromCompositionMode('editorial', 'drama', 1) === 'split-editorial', 'editorial mode maps to split-editorial');
+expect(layoutFromCompositionMode('edge-flow', 'adventure', 1) === 'off-center-bottom', 'edge-flow maps off-center');
+expect(layoutFromCompositionMode('quiet-minimal', 'romance', 1) === 'centered', 'quiet-minimal maps centered');
+expect(
+    layoutFromCompositionMode('diagonal', 'comedy', 3) !== 'split-editorial',
+    'comedy never inherits split-editorial from composition.mode'
+);
+
+$adventureNested = normalizeParams([
+    'semantic' => [
+        'grammarFamily' => 'adventure',
+        'emotionalCore' => 'wonder',
+        'narrativeCore' => 'discovery',
+        'visualMetaphor' => 'map-fold',
+        'narrativeAnchor' => 'map-fold',
+        'material' => 'paper',
+        'texture' => 'weathered',
+        'spatial' => 'expansive',
+        'particleSemantics' => 'dust',
+        'lineSemantics' => 'trails',
+        'humanElements' => 'map',
+        'groundTone' => 'mid',
+        'artFamily' => 'topographic',
+    ],
+    'composition' => ['mode' => 'edge-flow', 'negativeSpace' => 0.38],
+    'procedural' => ['primaryPattern' => 'flow', 'secondaryPattern' => 'particles', 'density' => 0.48],
+    'cinematic' => [
+        'subject' => 'A weathered folded map spread across packed earth, routes visible only as texture',
+        'environment' => 'Open terrain under a wide sky, distant ridgelines, unused space at the edges',
+        'lighting' => 'hard-sun',
+        'atmosphere' => 'dry dust in hard light',
+        'camera' => 'wide',
+    ],
+    'palette' => [
+        'background' => '#2C2118',
+        'primary' => '#C47A2C',
+        'secondary' => '#4A5C3A',
+        'accent' => '#C47A2C',
+        'text' => '#F1E4C8',
+        'highlight' => '#D4B46A',
+    ],
+    'typography' => [
+        'genreVisibility' => 'hidden',
+        'title' => ['weight' => 'bold', 'case' => 'uppercase', 'letterforms' => 'slab-serif', 'structure' => 'textured', 'placement' => 'lower-third'],
+        'quote' => ['style' => 'cinematic-subtitle', 'legibility' => 'shadow', 'placement' => 'below-title'],
+    ],
+], 'The Ochre Map', 'adventure', 'An expedition across ruined stone.');
+expect($adventureNested['composition']['layout'] === 'off-center-bottom', 'adventure edge-flow derives layout from mode');
+expect($adventureNested['semantic']['narrativeAnchor'] === $adventureNested['semantic']['visualMetaphor'], 'adventure nested DNA keeps aligned anchors');
+expect($adventureNested['warnings'] === [], 'nested v1.3 adventure DNA has zero avoidable fallbacks');
+
+$fbPlate = fallbackVisualParams('Rent-A-Mansion', 'Workplace Comedy', 'Eccentric tenants compete.', 21, 'generate', null);
+expect(mb_strlen((string) $fbPlate['cinematic']['subject']) > 40, 'local DNA emits a cinematic plate, not a token');
+expect(!plateLooksLikePosterCopy((string) $fbPlate['cinematic']['subject']), 'local cinematic subject is textless');
+expect(!plateLooksLikePosterCopy((string) $fbPlate['cinematic']['environment']), 'local cinematic environment is textless');
+
+$wh = whitelistPrevious($nested);
+expect(($wh['schemaVersion'] ?? '') === '1.3', 'whitelist exposes nested schema version');
+expect(isset($wh['semantic']['visualMetaphor']), 'whitelist exposes nested semantic block');
+expect(isset($wh['typography']['title']['letterforms']), 'whitelist exposes nested title typography');
+expect(($wh['typography']['genreVisibility'] ?? '') === 'hidden', 'whitelist keeps genre hidden');
 
 echo $failed === 0 ? "\nAll DNA tests passed.\n" : "\n{$failed} test(s) failed.\n";
 exit($failed === 0 ? 0 : 1);
