@@ -721,6 +721,23 @@ function layoutForComposition(string $grammar, int $seed, string $family = 'dram
     };
 }
 
+/**
+ * Map a v1.3 composition.mode onto a renderer layout when the AI omits layout.
+ */
+function layoutFromCompositionMode(string $mode, string $family, int $seed = 0): string
+{
+    if ($family === 'comedy') {
+        return $seed % 2 === 0 ? 'off-center-top' : 'off-center-bottom';
+    }
+    return match ($mode) {
+        'editorial', 'split-field' => 'split-editorial',
+        'type-dominant' => 'off-center-top',
+        'edge-flow', 'diagonal' => 'off-center-bottom',
+        'quiet-minimal', 'central-focus', 'framed-object' => 'centered',
+        default => 'centered',
+    };
+}
+
 function grammarDirectorBrief(string $family): string
 {
     $g = genreGrammar($family);

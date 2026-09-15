@@ -130,7 +130,7 @@ Pitch: {$pitch}
 Previous Visual DNA (whitelisted):
 {$prevJson}
 PROMPT;
-        $system = 'You refine FrameFlux Visual DNA into a stronger cinematic direction while staying faithful to the film.';
+        $system = 'You refine one nested FrameFlux Visual DNA v1.3 object. Keep a single semantic source of truth. Stay inside the allowed enums. Cinematic subject and environment remain a textless still photograph, never a poster. typography.genreVisibility is hidden. narrativeAnchor equals visualMetaphor. Return JSON only.';
         $temperature = 0.85;
     } elseif ($mode === 'reimagine' && $previous !== null) {
         $prevJson = json_encode($previous, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -143,7 +143,7 @@ You reinterpret the same film as a new cinematic direction. Return JSON only wit
 Same title, genre, and pitch. Choose a new visualMetaphor / narrativeAnchor and material from the same grammar family while staying true to the story.
 Stay inside this visual grammar:
 {$brief}
-New mood, lighting, camera, palette, layout, and patterns.
+New mood, lighting, camera, palette, composition.mode, and patterns.
 It must feel like a different creative campaign take, not a seed change. Variation seed: {$variation}.
 
 Film title: {$title}
@@ -153,16 +153,16 @@ Pitch: {$pitch}
 Previous Visual DNA (whitelisted) — do not copy it:
 {$prevJson}
 PROMPT;
-        $system = 'You reimagine a film as a new Visual DNA without abandoning the concept.';
+        $system = 'You reimagine one nested FrameFlux Visual DNA v1.3 object for the same film. One DNA only. Stay inside the allowed enums. Cinematic subject and environment remain a textless still photograph, never a poster. typography.genreVisibility is hidden. narrativeAnchor equals visualMetaphor. Return JSON only.';
         $temperature = 1.05;
     } else {
         $prompt = <<<PROMPT
-You are the FrameFlux art director. Convert a film concept into Visual DNA. Return JSON only with this exact shape:
+You are the FrameFlux Visual-DNA Architect. Convert a film concept into exactly one nested Visual DNA v1.3 object. Return JSON only with this exact shape:
 {$shape}
 
 {$rules}
 
-This is a new design pass (variation {$variation}). Derive emotionalCore, narrativeCore, visualMetaphor, material, and lighting from the story first, then invent palette, pattern pair, layout, and quote that serve that metaphor.
+This is a new design pass (variation {$variation}). Derive emotionalCore, narrativeCore, visualMetaphor, material, composition.mode, and lighting from the story first. Invent palette, pattern pair, and quote that serve that metaphor. Copy title, genre, and pitch exactly. narrativeAnchor must equal visualMetaphor. typography.genreVisibility must be hidden.
 
 {$brief}
 
@@ -170,7 +170,7 @@ Film title: {$title}
 Genre: {$genre}
 Pitch: {$pitch}
 PROMPT;
-        $system = 'You convert film concepts into strict Visual DNA for a hybrid cinematic / procedural poster system.';
+        $system = 'You convert film concepts into one nested Visual DNA v1.3 object for a hybrid cinematic / procedural poster system. One film equals one semantic DNA. Never invent enums. Never ask the image model to render typography. Return JSON only.';
         $temperature = 1.05;
     }
 
