@@ -4,16 +4,17 @@ Conceptual movie posters from a film title, genre, and optional one-line pitch.
 
 ```text
 human concept
+  → story interpretation + genre visual grammar
   → AI Art Director (Visual DNA)
   → cinematic key art
-  → p5.js interpretation (five visual languages)
+  → p5.js interpretation (genre-aware procedural families)
   → three related directions
   → poster
 ```
 
 AI establishes the cinematic world. Visual DNA structures that world. p5.js transforms it. Typography is drawn last, deterministically, never by the image model.
 
-The genre is an input for interpretation only. It steers colour, material, lighting, letterforms and procedural choices, but is never printed on the poster — `typography.genreVisibility` is locked to `hidden` and covered by a test.
+The story determines the emotional interpretation. The emotional interpretation determines the visual language. Genre is a grammar — material, colour, lighting, metaphor, composition, type — not a sticker. It is never printed on the poster (`typography.genreVisibility` is locked to `hidden`).
 
 ## Use
 
@@ -40,17 +41,19 @@ Without a key, Visual DNA is authored by a local heuristic and the cinematic sti
 
 ## Visual languages
 
-Flow field, geometric grid, particle scatter, concentric rings, angular mesh.
+Genre is a **visual grammar**, not a colour overlay. Comedy, romance, adventure, and contemporary stories receive their own materials, lighting, metaphors, composition, and procedural families. Circuit traces, neon grids, and dark geometric voids remain available for thrillers, sci-fi, and technological horror — they are no longer the default for every film.
+
+Procedural families include organic flow, chaotic cords, atmospheric haze, editorial paper layers, topographic trails, and (for tech stories) geometric grid / mesh / rings.
 
 ## Layouts
 
-Centered, off-center top, off-center bottom, split editorial, frame inset.
+Centered, off-center top, off-center bottom, split editorial, and frame inset. Frame inset is reserved for claustrophobic tech stories so human genres are not forced into the same sterile void.
 
 ## Typography
 
 Title and quote are separate art-directed decisions in the Visual DNA, derived from the story rather than the genre.
 
-- **Title** (`typography.title`): weight, case, letterforms, tracking, structural treatment (solid, outline, fragmented, layered, textured, gradient) and placement. Scale comes from title length and the safe width; long titles wrap, and a single unbreakable word hard-breaks rather than overflowing.
+- **Title** (`typography.title`): weight, case, letterforms, tracking, structural treatment (solid, outline, fragmented, layered, textured, gradient) and placement. Scale comes from title length and the safe width; long titles wrap, hyphenated words break at the hyphen, and a single unbreakable word hard-breaks rather than overflowing. Comedy layouts stay full-width so long titles are not squeezed into a split column.
 - **Quote** (`typography.quote`): style (editorial italic, caption, cinematic subtitle, typewriter, handwritten), its own legibility technique (scrim, shadow, plate) and placement. The quote face is always forced to contrast with the title face instead of repeating it smaller.
 
 Risky treatments are validated against the artwork underneath and degrade to a safer one when local contrast is insufficient. Readability wins over style.
