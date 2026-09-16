@@ -370,6 +370,42 @@ function clipText(string $value, int $max, string $fallback = ''): string
     return mb_substr($trimmed, 0, $max);
 }
 
+function quoteWordCount(string $value): int
+{
+    $words = preg_split('/\s+/', trim($value), -1, PREG_SPLIT_NO_EMPTY);
+    return is_array($words) ? count($words) : 0;
+}
+
+/**
+ * Drop sentences that ask the image model to render poster copy.
+ * The cinematic plate must stay a textless still.
+ */
+function plateLooksLikePosterCopy(string $text): bool
+{
+    return (bool) preg_match(
+        '/\b(movie poster|title card|tagline|credits?\b|logo|typography|lettering|typeface|caption|HUD|on[- ]screen text|readable (letters?|text|type)|poster typography|reserve(?:d)? (?:space )?for (?:the )?title)\b/i',
+        $text
+    );
+}
+
+function ensureTextlessPlate(string $text, string $fallback): string
+{
+    $trimmed = trim($text);
+    if ($trimmed === '') {
+        return $fallback;
+    }
+    $parts = preg_split('/(?<=[.!?])\s+/', $trimmed) ?: [$trimmed];
+    $kept = [];
+    foreach ($parts as $part) {
+        if (plateLooksLikePosterCopy($part)) {
+            continue;
+        }
+        $kept[] = $part;
+    }
+    $out = trim(implode(' ', $kept));
+    return $out !== '' ? $out : $fallback;
+}
+
 function resolveLayout(string $raw): string
 {
     $key = strtolower(trim($raw));
@@ -401,6 +437,45 @@ function whitelistPrevious(?array $previous): ?array
     $normalized = normalizeParams($previous, (string) ($previous['title'] ?? $previous['concept']['title'] ?? 'Film'), (string) ($previous['genre'] ?? $previous['concept']['genre'] ?? 'Drama'), (string) ($previous['pitch'] ?? $previous['concept']['pitch'] ?? ''));
 
     return [
+        'schemaVersion' => '1.3',
+        'concept' => [
+            'title' => $normalized['concept']['title'],
+            'genre' => $normalized['concept']['genre'],
+            'pitch' => $normalized['concept']['pitch'],
+            'mood' => $normalized['concept']['mood'],
+            'quote' => $normalized['concept']['quote'],
+        ],
+        'semantic' => $normalized['semantic'],
+        'cinematic' => [
+            'subject' => $normalized['cinematic']['subject'],
+            'environment' => $normalized['cinematic']['environment'],
+            'lighting' => $normalized['cinematic']['lighting'],
+            'atmosphere' => $normalized['cinematic']['atmosphere'],
+            'camera' => $normalized['cinematic']['camera'],
+        ],
+        'palette' => [
+            'background' => $normalized['palette']['background'],
+            'primary' => $normalized['palette']['primary'],
+            'secondary' => $normalized['palette']['secondary'],
+            'accent' => $normalized['palette']['accent'],
+            'text' => $normalized['palette']['text'],
+            'highlight' => $normalized['palette']['highlight'],
+        ],
+        'composition' => [
+            'mode' => $normalized['composition']['mode'],
+            'negativeSpace' => $normalized['composition']['negativeSpace'],
+        ],
+        'procedural' => [
+            'primaryPattern' => $normalized['procedural']['primaryPattern'],
+            'secondaryPattern' => $normalized['procedural']['secondaryPattern'],
+            'density' => $normalized['procedural']['density'],
+        ],
+        'typography' => [
+            'genreVisibility' => 'hidden',
+            'title' => $normalized['typography']['title'],
+            'quote' => $normalized['typography']['quote'],
+        ],
+        // Flat aliases consumed by the local improve/reimagine heuristic.
         'emotionalCore' => $normalized['semantic']['emotionalCore'],
         'narrativeCore' => $normalized['semantic']['narrativeCore'],
         'visualMetaphor' => $normalized['semantic']['visualMetaphor'],
@@ -412,13 +487,6 @@ function whitelistPrevious(?array $previous): ?array
         'lineSemantics' => $normalized['semantic']['lineSemantics'],
         'mood' => $normalized['mood'],
         'quote' => $normalized['quote'],
-        'palette' => [
-            'background' => $normalized['palette']['background'],
-            'primary' => $normalized['palette']['primary'],
-            'secondary' => $normalized['palette']['secondary'],
-            'accent' => $normalized['palette']['accent'],
-            'text' => $normalized['palette']['text'],
-        ],
         'layout' => $normalized['layout'],
         'primaryPattern' => $normalized['pattern'],
         'secondaryPattern' => $normalized['procedural']['secondaryPattern'],
@@ -450,6 +518,83 @@ const FRAMEFLUX_DANGLING_WORDS = [
     'who', 'whose', 'is', 'are', 'was', 'were', 'be', 'been', 'his', 'her',
     'their', 'its', 'this', 'these', 'those', 'when', 'while', 'after', 'before',
 ];
+
+function clipQuote(string $value, string $fallback = 'A story waiting for its first frame.'): string
+{
+    $trimmed = trim($value);
+    if ($trimmed === '') {
+        return $fallback;
+    }
+    $words = preg_split('/\s+/', $trimmed, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if (count($words) > 12) {
+        $words = array_slice($words, 0, 12);
+        while ($words !== []) {
+            $last = strtolower(rtrim((string) end($words), '.,;:!?'));
+            if (!in_array($last, FRAMEFLUX_DANGLING_WORDS, true)) {
+                break;
+            }
+            array_pop($words);
+        }
+        $trimmed = implode(' ', $words);
+    }
+    $trimmed = rtrim($trimmed, ' ,;:');
+    if ($trimmed !== '' && !preg_match('/[.!?…]$/u', $trimmed)) {
+        $trimmed .= '.';
+    }
+    return clipText($trimmed, 120, $fallback);
+}
+
+/**
+ * Local cinematic plate when the model omits subject/environment.
+ * Describes a still photograph, never a poster.
+ *
+ * @return array{subject: string, environment: string, atmosphere: string}
+ */
+function fallbackCinematicPlate(array $semantic, string $lighting): array
+{
+    $anchor = str_replace('-', ' ', (string) ($semantic['narrativeAnchor'] ?? $semantic['visualMetaphor'] ?? 'threshold'));
+    $material = (string) ($semantic['material'] ?? 'paper');
+    $texture = (string) ($semantic['texture'] ?? 'grainy');
+    $spatial = (string) ($semantic['spatial'] ?? 'isolated');
+    $human = (string) ($semantic['humanElements'] ?? 'none');
+    $family = (string) ($semantic['grammarFamily'] ?? 'drama');
+    $ground = (string) ($semantic['groundTone'] ?? 'mid');
+
+    $humanClause = match ($human) {
+        'hands' => 'a pair of hands at the edge of frame, faces unseen',
+        'letter' => 'an opened letter in the foreground whose marks stay illegible as paper texture',
+        'tickets' => 'worn paper tickets on a surface, printing reduced to texture',
+        'cups' => 'two cups left on a table, still catching the light',
+        'paired-objects' => 'two matching objects set slightly apart',
+        'signage' => 'blank weathered signage with unmarked faces',
+        'map' => 'a folded map whose routes remain illegible texture',
+        'silhouette' => 'a distant human silhouette, face unseen',
+        default => 'no posed portrait, unmarked surfaces',
+    };
+
+    $subject = "A cinematic still photograph of {$anchor} as a physical presence in the frame, {$texture} {$material} catching {$lighting} light, {$spatial} staging, {$humanClause}";
+
+    $environment = match ($family) {
+        'comedy' => 'a sunlit, slightly chaotic interior with paper clutter and generous empty floor around the object',
+        'romance' => 'a weathered coastal interior opening toward hazy shoreline air, linen and salt on every surface',
+        'contemporary' => 'a quiet domestic threshold beside a commuter window, warm indoor light against cooler glass',
+        'adventure' => 'open terrain under a wide sky, packed earth and distant ridgelines, room to travel',
+        'thriller' => 'a compressed interior of glass and shadow, sightlines interrupted',
+        'scifi' => 'an unfamiliar architectural volume, physically built rather than holographic',
+        'horror' => 'a dim threshold where the far room falls out of sight',
+        'mystery' => 'a study of paper, wood, and withheld light',
+        'fantasy' => 'a mythic landscape of weathered stone and open sky, physically grounded',
+        default => $ground === 'light'
+            ? 'a physically believable interior with paper-warm walls and unused space at the edges'
+            : 'a physically believable interior with unused space at the edges of the frame',
+    };
+
+    return [
+        'subject' => $subject,
+        'environment' => $environment,
+        'atmosphere' => $texture . ' air, physically believable haze',
+    ];
+}
 
 /**
  * The genre never reaches the poster, so it is deliberately not a quote source.
@@ -1150,7 +1295,8 @@ function fallbackVisualParams(
     $primary = $preset['acc'];
 
     [$pattern, $secondPat] = patternForSemantic($semantic, $seed);
-    $layout = layoutForSemantic($semantic, $seed);
+    $compositionMode = (string) ($semantic['compositionMode'] ?? compositionModeFor((string) $semantic['grammarFamily'], (string) ($semantic['compositionGrammar'] ?? 'central'), $seed));
+    $layout = layoutFromCompositionMode($compositionMode, (string) $semantic['grammarFamily'], $seed);
     $titleStyle = match ($semantic['emotionalCore']) {
         'intimacy', 'nostalgia', 'grief', 'longing' => 'elegant',
         'urgency', 'paranoia', 'control' => 'condensed',
@@ -1193,6 +1339,7 @@ function fallbackVisualParams(
     };
 
     $typeDirection = inferTypographyDirection($semantic, $genre, $seed);
+    $plate = fallbackCinematicPlate($semantic, $lighting);
 
     return [
         'palette' => [
@@ -1236,10 +1383,10 @@ function fallbackVisualParams(
         'lightDirection' => 0.15 + ($seed % 70) / 100,
         'shadowDensity' => $shadow,
         'cinematic' => [
-            'subject' => str_replace('-', ' ', $semantic['narrativeAnchor']),
-            'environment' => $semantic['material'] . ' space under ' . $lighting . ' light',
+            'subject' => $plate['subject'],
+            'environment' => $plate['environment'],
             'lighting' => $lighting,
-            'atmosphere' => $semantic['texture'] . ' ' . $semantic['material'],
+            'atmosphere' => $plate['atmosphere'],
             'camera' => $camera,
             'tension' => round(clamp(0.2 + $energy * 0.55, 0, 1), 2),
             'intensity' => round(clamp(0.3 + $energy * 0.5, 0.2, 1), 2),
@@ -1276,14 +1423,13 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         $warnings[] = 'secondaryPattern duplicated primary';
     }
 
-    $layout = resolveLayout((string) ($compositionIn['layout'] ?? $params['layout'] ?? 'centered'));
     $titleStyle = enumValue(
         (string) ($typographyIn['titleStyle'] ?? $params['titleStyle'] ?? 'bold'),
         FRAMEFLUX_STYLES,
         'bold'
     );
 
-    $quote = clipText((string) ($conceptIn['quote'] ?? $params['quote'] ?? ''), 120, 'A story waiting for its first frame.');
+    $quote = clipQuote((string) ($conceptIn['quote'] ?? $params['quote'] ?? ''));
     $mood = clipText((string) ($conceptIn['mood'] ?? $params['mood'] ?? 'cinematic'), 80, 'cinematic');
 
     $inferred = inferSemanticProfile(
@@ -1333,15 +1479,8 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         $visualMetaphor = $inferred['visualMetaphor'];
         $warnings[] = 'tech metaphor coerced';
     }
-    $narrativeAnchor = aliasedEnum(
-        (string) ($semanticIn['narrativeAnchor'] ?? $params['narrativeAnchor'] ?? $visualMetaphor),
-        FRAMEFLUX_METAPHOR_ALIASES,
-        FRAMEFLUX_METAPHORS,
-        $visualMetaphor
-    );
-    if (!isTechFamily($family) && in_array($narrativeAnchor, ['orbital-system', 'signal'], true)) {
-        $narrativeAnchor = $visualMetaphor;
-    }
+    // Production contract: narrativeAnchor is the same token as visualMetaphor.
+    $narrativeAnchor = $visualMetaphor;
     $material = enumValue(
         (string) ($semanticIn['material'] ?? $params['material'] ?? ''),
         FRAMEFLUX_MATERIALS,
@@ -1390,6 +1529,12 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         COMPOSITION_MODES,
         $inferred['compositionMode'] ?? compositionModeFor($family, $compositionGrammar, abs(crc32($title)))
     );
+    $rawLayout = trim((string) ($compositionIn['layout'] ?? $params['layout'] ?? ''));
+    if ($rawLayout !== '') {
+        $layout = resolveLayout($rawLayout);
+    } else {
+        $layout = layoutFromCompositionMode($compositionMode, $family, abs(crc32($title . '|layout')));
+    }
     $artFamily = enumValue(
         (string) ($semanticIn['artFamily'] ?? $params['artFamily'] ?? $inferred['artFamily'] ?? ''),
         ART_FAMILIES,
@@ -1550,6 +1695,33 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
         ),
     ];
 
+    $plateFallback = fallbackCinematicPlate(
+        [
+            'narrativeAnchor' => $narrativeAnchor,
+            'visualMetaphor' => $visualMetaphor,
+            'material' => $material,
+            'texture' => $texture,
+            'spatial' => $spatial,
+            'humanElements' => $humanElements,
+            'grammarFamily' => $family,
+            'groundTone' => $groundTone,
+        ],
+        $lighting
+    );
+    $cinematicSubject = ensureTextlessPlate(
+        clipText((string) ($cinematicIn['subject'] ?? ''), 480, ''),
+        $plateFallback['subject']
+    );
+    $cinematicEnvironment = ensureTextlessPlate(
+        clipText((string) ($cinematicIn['environment'] ?? ''), 480, ''),
+        $plateFallback['environment']
+    );
+    $cinematicAtmosphere = clipText(
+        (string) ($cinematicIn['atmosphere'] ?? ''),
+        180,
+        $plateFallback['atmosphere']
+    );
+
     return [
         'schemaVersion' => '1.3',
         'concept' => [
@@ -1576,10 +1748,10 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
             'artFamily' => $artFamily,
         ],
         'cinematic' => [
-            'subject' => clipText((string) ($cinematicIn['subject'] ?? str_replace('-', ' ', $narrativeAnchor)), 80, str_replace('-', ' ', $narrativeAnchor)),
-            'environment' => clipText((string) ($cinematicIn['environment'] ?? $material . ' atmosphere'), 80, $material . ' atmosphere'),
+            'subject' => $cinematicSubject,
+            'environment' => $cinematicEnvironment,
             'lighting' => $lighting,
-            'atmosphere' => clipText((string) ($cinematicIn['atmosphere'] ?? $texture . ' ' . $material), 60, $texture . ' ' . $material),
+            'atmosphere' => $cinematicAtmosphere,
             'camera' => $camera,
             'tension' => $tension,
             'intensity' => $intensity,
@@ -1655,71 +1827,94 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
 
 function dnaShapePrompt(): string
 {
-    return <<<'SHAPE'
+    $emotions = implode(' | ', FRAMEFLUX_EMOTIONS);
+    $narratives = implode(' | ', FRAMEFLUX_NARRATIVES);
+    $metaphors = implode(' | ', FRAMEFLUX_METAPHORS);
+    $materials = implode(' | ', FRAMEFLUX_MATERIALS);
+    $textures = implode(' | ', FRAMEFLUX_TEXTURES);
+    $spatial = implode(' | ', FRAMEFLUX_SPATIAL);
+    $particles = implode(' | ', FRAMEFLUX_PARTICLE_SEMANTICS);
+    $lines = implode(' | ', FRAMEFLUX_LINE_SEMANTICS);
+    $humans = implode(' | ', FRAMEFLUX_HUMAN_ELEMENTS);
+    $families = implode(' | ', GENRE_FAMILIES);
+    $art = implode(' | ', ART_FAMILIES);
+    $modes = implode(' | ', COMPOSITION_MODES);
+    $patterns = implode(' | ', FRAMEFLUX_PATTERNS);
+    $lighting = implode(' | ', FRAMEFLUX_LIGHTING);
+    $camera = implode(' | ', FRAMEFLUX_CAMERA);
+    $weights = implode(' | ', FRAMEFLUX_TITLE_WEIGHTS);
+    $cases = implode(' | ', FRAMEFLUX_TITLE_CASES);
+    $letterforms = implode(' | ', FRAMEFLUX_LETTERFORMS);
+    $structures = implode(' | ', FRAMEFLUX_TITLE_STRUCTURES);
+    $titlePlace = implode(' | ', FRAMEFLUX_TITLE_PLACEMENTS);
+    $quoteStyles = implode(' | ', FRAMEFLUX_QUOTE_STYLES);
+    $quoteLegibility = implode(' | ', FRAMEFLUX_QUOTE_LEGIBILITY);
+    $quotePlace = implode(' | ', FRAMEFLUX_QUOTE_PLACEMENTS);
+
+    return <<<SHAPE
 {
+  "schemaVersion": "1.3",
+  "concept": {
+    "title": "copy the supplied film title exactly",
+    "genre": "copy the supplied genre exactly",
+    "pitch": "copy the supplied pitch, or empty string",
+    "mood": "short mood description",
+    "quote": "short cinematic poster tagline, maximum 12 words"
+  },
+  "semantic": {
+    "grammarFamily": "{$families}",
+    "emotionalCore": "{$emotions}",
+    "narrativeCore": "{$narratives}",
+    "visualMetaphor": "{$metaphors}",
+    "narrativeAnchor": "MUST equal visualMetaphor",
+    "material": "{$materials}",
+    "texture": "{$textures}",
+    "spatial": "{$spatial}",
+    "particleSemantics": "{$particles}",
+    "lineSemantics": "{$lines}",
+    "humanElements": "{$humans}",
+    "groundTone": "light | mid | dark",
+    "artFamily": "{$art}"
+  },
+  "cinematic": {
+    "subject": "textless cinematic still subject for the image model — physical object, action, scale, perspective, materials; never a poster",
+    "environment": "textless physical setting, architecture, terrain, depth, lighting conditions",
+    "lighting": "{$lighting}",
+    "atmosphere": "weather, haze, particulate, air",
+    "camera": "{$camera}"
+  },
   "palette": {
     "background": "#hex",
     "primary": "#hex",
     "secondary": "#hex",
     "accent": "#hex",
     "text": "#hex",
-    "highlight": "#hex",
-    "neutral": "#hex"
+    "highlight": "#hex"
   },
-  "pattern": "flow" | "grid" | "particles" | "rings" | "mesh",
-  "secondaryPattern": "flow" | "grid" | "particles" | "rings" | "mesh",
-  "layout": "centered" | "off-center-top" | "off-center-bottom" | "split-editorial" | "frame-inset",
-  "mood": "short mood phrase",
-  "quote": "short cinematic poster tagline, max 12 words",
-  "density": number between 0.2 and 0.85,
-  "contrast": number between 0.4 and 1,
-  "titleStyle": "bold" | "elegant" | "condensed" | "geometric" | "editorial",
-  "titleTypographyDirection": {
-    "weight": "hairline" | "light" | "regular" | "bold" | "black",
-    "case": "uppercase" | "title" | "lowercase" | "mixed",
-    "letterforms": "classical-serif" | "slab-serif" | "geometric-sans" | "grotesque" | "condensed" | "extended" | "hand-lettered" | "distressed" | "technical-stencil",
-    "tracking": "tight" | "normal" | "wide",
-    "structure": "solid" | "outline" | "fragmented" | "layered" | "textured" | "gradient",
-    "placement": "upper-third" | "lower-third" | "centered" | "split"
+  "composition": {
+    "mode": "{$modes}",
+    "negativeSpace": 0.15
   },
-  "quoteTypographyDirection": {
-    "style": "editorial-italic" | "caption" | "cinematic-subtitle" | "typewriter" | "handwritten",
-    "legibility": "scrim" | "shadow" | "plate" | "none",
-    "placement": "below-title" | "bottom-anchored" | "focal-adjacent"
+  "procedural": {
+    "primaryPattern": "{$patterns}",
+    "secondaryPattern": "{$patterns}",
+    "density": 0.20
   },
-  "emotionalCore": "paranoia" | "wonder" | "grief" | "isolation" | "urgency" | "nostalgia" | "dread" | "intimacy" | "triumph" | "unease" | "longing" | "playfulness" | "hope",
-  "narrativeCore": "escape" | "investigation" | "forbidden-love" | "survival" | "identity" | "betrayal" | "discovery" | "control" | "family" | "transformation" | "obsession" | "memory",
-  "visualMetaphor": "fractured-glass" | "eclipse" | "locked-mechanism" | "decaying-photograph" | "tangled-roots" | "maze" | "burning-document" | "distorted-reflection" | "clock-mechanism" | "biological-cell" | "architectural-ruin" | "orbital-system" | "keyhole" | "map-fold" | "signal" | "silhouette-threshold" | "chaotic-key" | "chandelier-cluster" | "tangled-cords" | "coastal-compass" | "handwritten-letter" | "weathered-door" | "correspondence-clock" | "railway-route" | "paired-objects" | "postcard" | "compass-rose",
-  "narrativeAnchor": "same controlled set as visualMetaphor — the dominant object the poster is about",
-  "material": "glass" | "metal" | "paper" | "concrete" | "fabric" | "film-stock" | "smoke" | "water" | "dust" | "wood" | "rust" | "ink" | "stone" | "plastic" | "foil" | "cardstock" | "linen" | "leather" | "brass",
-  "texture": "distressed" | "smooth" | "grainy" | "scratched" | "weathered" | "glossy" | "dusty" | "corroded" | "fibrous" | "translucent" | "photographic",
-  "spatial": "compressed" | "fragmented" | "expanding" | "collapsing" | "spiralling" | "rising" | "drifting" | "converging" | "isolated" | "claustrophobic" | "expansive",
-  "particleSemantics": "dust" | "ash" | "stars" | "rain" | "sparks" | "pollen" | "debris" | "grain" | "confetti" | "salt" | "sand" | "ember",
-  "lineSemantics": "cracks" | "roots" | "wiring" | "threads" | "veins" | "roads" | "circuitry" | "plans" | "cords" | "ribbons" | "waves" | "coastline" | "handwriting" | "horizon" | "contour" | "trails" | "railway",
-  "grammarFamily": "comedy" | "romance" | "adventure" | "contemporary" | "drama" | "thriller" | "scifi" | "horror" | "fantasy" | "mystery" | "historical" | "coming-of-age" | "documentary" | "musical" | "animation" | "family",
-  "narrativeEnergy": number 0.1-0.95,
-  "compositionGrammar": "asymmetric" | "central" | "editorial" | "diagonal" | "layered" | "expansive" | "minimal" | "crowded" | "organic",
-  "compositionMode": "central-focus" | "editorial" | "split-field" | "framed-object" | "type-dominant" | "edge-flow" | "diagonal" | "quiet-minimal",
-  "artFamily": "angular" | "organic" | "particles" | "ordered-grid" | "radial" | "topographic" | "pattern",
-  "print": { "registration": number 0-1, "halftone": number 0-1, "scanlines": number 0-1, "grain": number 0-1 },
-  "proceduralFamily": "organic" | "geometric" | "tactile" | "chaotic" | "atmospheric" | "editorial" | "topographic" | "material" | "linear" | "particle",
-  "humanElements": "none" | "silhouette" | "hands" | "letter" | "tickets" | "cups" | "paired-objects" | "signage" | "map",
-  "groundTone": "light" | "mid" | "dark",
-  "lightDirection": number 0-1,
-  "shadowDensity": number 0.2-0.95,
-  "anchorScale": number 0.4-1.1,
-  "materialEmphasis": number 0.3-1,
-  "cinematic": {
-    "subject": "who or what occupies the frame, no readable text",
-    "environment": "place and time of day",
-    "lighting": "chiaroscuro" | "neon" | "overcast" | "golden-hour" | "moonlit" | "practical" | "harsh" | "rim" | "backlit" | "high-key" | "theatrical" | "coastal-haze" | "bloom" | "hard-sun" | "shaft" | "domestic-warm" | "window-light",
-    "atmosphere": "weather / haze / dust",
-    "camera": "wide" | "close" | "aerial" | "dutch" | "tracking" | "static",
-    "tension": number 0-1,
-    "intensity": number 0-1
-  },
-  "focalX": number 0.15-0.85,
-  "focalY": number 0.15-0.85
+  "typography": {
+    "genreVisibility": "hidden",
+    "title": {
+      "weight": "{$weights}",
+      "case": "{$cases}",
+      "letterforms": "{$letterforms}",
+      "structure": "{$structures}",
+      "placement": "{$titlePlace}"
+    },
+    "quote": {
+      "style": "{$quoteStyles}",
+      "legibility": "{$quoteLegibility}",
+      "placement": "{$quotePlace}"
+    }
+  }
 }
 SHAPE;
 }
@@ -1727,56 +1922,42 @@ SHAPE;
 function dnaRulesPrompt(): string
 {
     return <<<'RULES'
-You are translating a SPECIFIC film concept into Visual DNA. Story first, then emotion, then genre grammar, then metaphor, then material / colour / light / type.
+You are the FrameFlux Visual-DNA Architect. Translate ONE film (title + genre + optional pitch) into ONE nested Visual DNA v1.3 object.
 
-BAN THE GENERIC CYBER DEFAULT. Circuit traces, neon grids, blue/purple tech glow, and dark geometric voids are ONLY for cyber thrillers, hacker dramas, AI stories, dystopian sci-fi, and technological horror. Comedy, romance, adventure, contemporary, drama, and family stories must live in a physical material world.
+ARCHITECTURE:
+- One film = one semantic source of truth. Do not emit Signature, Hybrid, Alternative, Experimental, or any second DNA object. The frontend derives those three roles from this single object.
+- Return only the production keys in the given shape. Do not add verification, concepts, artDirection, layoutStrategy, focalPoint, or other extra keys.
+- Never invent enum values. If a richer idea will not fit a controlled field, express it in cinematic.subject / cinematic.environment / cinematic.atmosphere.
+- concept.title, concept.genre, and concept.pitch must copy the supplied inputs. Do not rewrite the title. Do not replace the user-facing genre with grammarFamily.
+- semantic.narrativeAnchor MUST equal semantic.visualMetaphor.
 
-LESS BUT BETTER:
-- Choose ONE dominant visualMetaphor / narrativeAnchor that contains the emotional conflict.
-- Choose ONE primary material that the whole poster inhabits.
-- secondaryPattern must support the metaphor, not compete with it.
-- density follows narrativeEnergy (contemplative ~0.25, chaotic ~0.75).
+STORY FIRST, THEN GRAMMAR:
+- Interpret the story: emotional core, conflict, stakes, environment, motifs. Do not illustrate only the literal plot.
+- Genre is a visual grammar, not a colour, texture, or centred-object preset.
+- Choose composition.mode from the story (duality → split-field, journey → edge-flow or diagonal, object/threshold → framed-object, restraint → quiet-minimal, layered information → editorial, kinetic conflict → diagonal, title as identity → type-dominant). Do not default to central-focus.
+- Choose procedural.primaryPattern / secondaryPattern from meaning (flow for movement, particles for atmosphere/chaos, rings for cycles, grid/mesh only when the story is systemic or technological). Density is a number 0.20–0.85. negativeSpace is a number 0.15–0.85.
+- Do not always pair flow+grid or grid+mesh.
 
-Metaphor meanings:
-- chaotic-key / tangled-cords / chandelier-cluster = comic luxury, access, excess
-- coastal-compass / handwritten-letter / weathered-door = memory, distance, coastal intimacy
-- correspondence-clock / railway-route / postcard / paired-objects = time, travel, human connection
-- compass-rose / map-fold = exploration, borders
-- fractured-glass = identity, violence, fragile truth
-- eclipse = omen, concealment, cosmic scale
-- locked-mechanism / keyhole = secrets, heists, denied access
-- decaying-photograph = memory, archive, grief
-- tangled-roots = family, origin, entanglement
-- maze = confusion, bureaucracy
-- burning-document = erased evidence
-- distorted-reflection = doubles, impostors
-- clock-mechanism = time pressure (mechanical, not correspondence)
-- biological-cell = body, contagion
-- architectural-ruin = collapse of systems/places
-- orbital-system = systems, surveillance, space (sci-fi only unless the story is cosmic)
-- signal = frequencies, contact (tech stories)
-- silhouette-threshold = arrival, departure, liminal figures
+TEXTLESS CINEMATIC PLATE:
+- cinematic.subject and cinematic.environment describe a cinematic still photograph for a movie, NOT a poster.
+- The image model never renders typography. Do not mention title placement, taglines, quotes, logos, credits, captions, HUD, UI, lettering, or reserved space for type.
+- Language equivalent to: no typography, no titles, no captions, no logos, no credits, no UI — as a constraint, not as something to draw.
+- Typography exists only under typography.title and typography.quote. typography.genreVisibility must be exactly "hidden".
 
-Colour must communicate emotion, not decoration. Light-ground genres (comedy, romance, contemporary) use cream / paper / coastal grounds — do not automatically darken them.
-Lighting is emotional: high-key for comedy, coastal-haze for romance, chiaroscuro for adventure, domestic-warm for contemporary.
-particleSemantics and lineSemantics must match the metaphor (confetti/cords for comedy, salt/waves for coast, railway/handwriting for letters).
-Invent a short original quote. Do not copy the pitch. Max 12 words.
-Cinematic subject describes the still, never poster type.
+QUOTE AND TYPE CONTRAST:
+- concept.quote is a complete cinematic tagline, maximum 12 words, no genre name, no layout instructions.
+- Title and quote must occupy different typographic categories (serif title → sans/mono/handwritten quote; sans title → editorial-italic/typewriter/handwritten; distressed → caption/cinematic-subtitle/typewriter). Never pair classical-serif with editorial-italic.
 
-TYPOGRAPHY IS ART DIRECTION, NOT A TEMPLATE:
-- Genre is NEVER printed on the poster. Do not request a genre label, badge, tag, or single-letter mark.
-  Genre only informs colour, material, lighting, letterforms, and procedural choices.
-- titleTypographyDirection must be derived from the story: weight from how loud it is, case from its
-  emotional register, letterforms from the material language, tracking from how much air the space has,
-  structure from material behaviour (glass wants outline, corroded metal wants textured, smoke wants gradient,
-  fragmented space wants fragmented type). Comedy may tilt and split; romance stays literary; contemporary is editorial.
-- titleTypographyDirection.placement must sit in the composition's negative space, away from the focal mass.
-- quoteTypographyDirection must CONTRAST with the title face, never repeat it smaller. A serif display title
-  pairs with a sans or mono quote; a sans title pairs with an editorial serif quote.
-- quoteTypographyDirection.legibility should feel native to the chosen quote style: editorial and caption
-  styles take a thin scrim, cinematic subtitles take a soft shadow, typewriter and handwritten styles take a
-  translucent plate.
-- The quote must always read as clearly subordinate to the title.
+GENRE GROUNDING:
+- comedy, romance, and contemporary strongly prefer groundTone "light" and a background luminance above 0.45 unless the story makes darkness unavoidable.
+- grid, mesh, circuitry, and wiring are prohibited for comedy, romance, adventure, drama, and contemporary unless the story itself is about technology. They may appear for scifi, thriller, and horror when motivated.
+- Comedy: playfulness, social friction, physical objects — not neon tech. Romance: intimacy/longing, paired objects, fabric/paper — not hearts or pink defaults. Adventure: terrain, route, scale — not a glowing abstract centre. Horror: absence, threshold, implied threat — not skulls or blood. Sci-fi: speculation appropriate to THIS story — not automatic neon circuitry.
+
+ANTI-TEMPLATE:
+- Would another genre naturally need a different composition.mode, metaphor, material, pattern, and spatial behaviour? If not, revise.
+- Human elements only when necessary. Do not default to silhouette.
+
+Return valid JSON only. No markdown. No prose before or after the object.
 RULES;
 }
 
@@ -1810,6 +1991,21 @@ function assessDnaQuality(array $dna): array
     }
     if (($typography['quote']['pairing'] ?? 'contrast') !== 'contrast') {
         $notes[] = 'quote-pairing-not-contrasting';
+    }
+    if (($semantic['narrativeAnchor'] ?? '') !== ($semantic['visualMetaphor'] ?? '')) {
+        $notes[] = 'narrative-anchor-mismatch';
+    }
+    $quoteText = (string) (($dna['concept']['quote'] ?? $dna['quote'] ?? ''));
+    if ($quoteText !== '' && quoteWordCount($quoteText) > 12) {
+        $notes[] = 'quote-over-twelve-words';
+    }
+    $cinematic = is_array($dna['cinematic'] ?? null) ? $dna['cinematic'] : [];
+    if (plateLooksLikePosterCopy((string) ($cinematic['subject'] ?? '')) || plateLooksLikePosterCopy((string) ($cinematic['environment'] ?? ''))) {
+        $notes[] = 'cinematic-plate-has-typography';
+    }
+    $mode = (string) (($dna['composition']['mode'] ?? ''));
+    if ($mode !== '' && !in_array($mode, COMPOSITION_MODES, true)) {
+        $notes[] = 'composition-mode-unknown';
     }
 
     $particle = $semantic['particleSemantics'] ?? '';
