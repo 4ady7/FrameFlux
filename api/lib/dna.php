@@ -4,7 +4,18 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/grammar.php';
 
-const FRAMEFLUX_PATTERNS = ['flow', 'grid', 'particles', 'rings', 'mesh'];
+const FRAMEFLUX_PATTERNS = [
+    'flow',
+    'grid',
+    'particles',
+    'rings',
+    'mesh',
+    'halftone',
+    'hatching',
+    'creases',
+    'marbling',
+    'sunburst',
+];
 const FRAMEFLUX_LAYOUTS = [
     'centered',
     'off-center-top',
@@ -62,6 +73,13 @@ const FRAMEFLUX_METAPHORS = [
     'paired-objects',
     'postcard',
     'compass-rose',
+    'canine-silhouette',
+    'animal-tracks',
+    'mountain-ridge',
+    'alpine-peak',
+    'wild-canopy',
+    'botanical-press',
+    'forest-fringe',
 ];
 
 const FRAMEFLUX_MATERIALS = [
@@ -84,6 +102,12 @@ const FRAMEFLUX_MATERIALS = [
     'linen',
     'leather',
     'brass',
+    'fur',
+    'bone',
+    'bark',
+    'pressed-leaves',
+    'granite',
+    'slate',
 ];
 
 const FRAMEFLUX_TEXTURES = [
@@ -147,6 +171,9 @@ const FRAMEFLUX_LINE_SEMANTICS = [
     'contour',
     'trails',
     'railway',
+    'tendrils',
+    'fault-lines',
+    'paw-prints',
 ];
 
 const FRAMEFLUX_EMOTIONS = [
@@ -245,6 +272,15 @@ const FRAMEFLUX_METAPHOR_ALIASES = [
     'signal-burst' => 'signal',
     'silhouette' => 'silhouette-threshold',
     'roots' => 'tangled-roots',
+    'dog' => 'canine-silhouette',
+    'canine' => 'canine-silhouette',
+    'tracks' => 'animal-tracks',
+    'mountain' => 'mountain-ridge',
+    'peak' => 'alpine-peak',
+    'summit' => 'alpine-peak',
+    'canopy' => 'wild-canopy',
+    'garden' => 'botanical-press',
+    'forest' => 'wild-canopy',
 ];
 
 const FRAMEFLUX_LINE_ALIASES = [
@@ -252,6 +288,10 @@ const FRAMEFLUX_LINE_ALIASES = [
     'wave' => 'waves',
     'trail' => 'trails',
     'crack' => 'cracks',
+    'tendril' => 'tendrils',
+    'fault' => 'fault-lines',
+    'paw' => 'paw-prints',
+    'paws' => 'paw-prints',
 ];
 
 const FRAMEFLUX_PARTICLE_ALIASES = [
@@ -270,6 +310,8 @@ const FRAMEFLUX_HUMAN_ELEMENTS = [
     'paired-objects',
     'signage',
     'map',
+    'animal-silhouette',
+    'flora',
 ];
 
 const FRAMEFLUX_LAYOUT_ALIASES = [
@@ -297,7 +339,16 @@ const FRAMEFLUX_PATTERN_ALIASES = [
     'organic' => 'flow',
     'topo' => 'flow',
     'fiber' => 'flow',
-    'halftone' => 'particles',
+    'halftone' => 'halftone',
+    'hatching' => 'hatching',
+    'creases' => 'creases',
+    'marbling' => 'marbling',
+    'sunburst' => 'sunburst',
+    'hatch' => 'hatching',
+    'crease' => 'creases',
+    'marble' => 'marbling',
+    'dots' => 'halftone',
+    'screenprint' => 'halftone',
     'noise' => 'particles',
     'none' => 'flow',
 ];
@@ -331,6 +382,15 @@ function coerceToList(string $value, array $allowed, string $fallback): string
         return $fallback;
     }
     return in_array($value, $allowed, true) ? $value : $fallback;
+}
+
+function storySupportsAtmosphericLight(string $title, string $genre, string $pitch): bool
+{
+    $blob = strtolower($title . ' ' . $genre . ' ' . $pitch);
+    return (bool) preg_match(
+        '/\b(dusk|dawn|twilight|night|midnight|storm|tempest|overcast|moonlit?|nocturnal|after dark|sundown|sunrise|gloaming|eclipse|rain-dark|sodium|daylight|candlelit|low-light|fog)\b/',
+        $blob
+    );
 }
 
 function hexLuminance(string $hex): float
@@ -382,8 +442,11 @@ function quoteWordCount(string $value): int
  */
 function plateLooksLikePosterCopy(string $text): bool
 {
+    if (str_contains($text, 'REF://')) {
+        return true;
+    }
     return (bool) preg_match(
-        '/\b(movie poster|title card|tagline|credits?\b|logo|typography|lettering|typeface|caption|HUD|on[- ]screen text|readable (letters?|text|type)|poster typography|reserve(?:d)? (?:space )?for (?:the )?title)\b/i',
+        '/\b(movie poster|title card|tagline|credits?\b|logo|typography|lettering|typeface|caption|HUD|on[- ]screen text|readable (letters?|text|type)|poster typography|reserve(?:d)? (?:space )?for (?:the )?title|reference (code|label|identifier))\b/i',
         $text
     );
 }
@@ -569,24 +632,41 @@ function fallbackCinematicPlate(array $semantic, string $lighting): array
         'signage' => 'blank weathered signage with unmarked faces',
         'map' => 'a folded map whose routes remain illegible texture',
         'silhouette' => 'a distant human silhouette, face unseen',
+        'animal-silhouette' => 'a watchful animal silhouette at the edge of the frame, no posed human portrait',
+        'flora' => 'living or pressed botanical forms, no posed human portrait',
         default => 'no posed portrait, unmarked surfaces',
     };
 
-    $subject = "A cinematic still photograph of {$anchor} as a physical presence in the frame, {$texture} {$material} catching {$lighting} light, {$spatial} staging, {$humanClause}";
+    $metaphor = (string) ($semantic['visualMetaphor'] ?? $semantic['narrativeAnchor'] ?? '');
+    $natureSubject = match ($metaphor) {
+        'canine-silhouette' => "A cinematic still of a watchful dog in profile against open country, {$texture} {$material} catching {$lighting} light, {$spatial} staging, no studio fashion portrait",
+        'animal-tracks' => "A cinematic still of animal tracks crossing weathered ground, {$texture} {$material} catching {$lighting} light, {$spatial} staging, wildlife present as environmental fact, no posed human portrait",
+        'mountain-ridge', 'alpine-peak' => "A cinematic still of a faceted mountain mass and ridgeline, {$texture} {$material} catching {$lighting} light, {$spatial} staging, alpine weather in the air, no posed human portrait",
+        'wild-canopy', 'forest-fringe' => "A cinematic still of a living canopy and forest fringe, {$texture} {$material} catching {$lighting} light, {$spatial} staging, botanical mass as the subject, no posed human portrait",
+        'botanical-press' => "A cinematic still of pressed plants and archival botanical sheets, {$texture} {$material} catching {$lighting} light, {$spatial} staging, no posed human portrait",
+        default => null,
+    };
+    $subject = $natureSubject ?? "A cinematic still photograph of {$anchor} as a physical presence in the frame, {$texture} {$material} catching {$lighting} light, {$spatial} staging, {$humanClause}";
 
-    $environment = match ($family) {
-        'comedy' => 'a sunlit, slightly chaotic interior with paper clutter and generous empty floor around the object',
-        'romance' => 'a weathered coastal interior opening toward hazy shoreline air, linen and salt on every surface',
-        'contemporary' => 'a quiet domestic threshold beside a commuter window, warm indoor light against cooler glass',
-        'adventure' => 'open terrain under a wide sky, packed earth and distant ridgelines, room to travel',
-        'thriller' => 'a compressed interior of glass and shadow, sightlines interrupted',
-        'scifi' => 'an unfamiliar architectural volume, physically built rather than holographic',
-        'horror' => 'a dim threshold where the far room falls out of sight',
-        'mystery' => 'a study of paper, wood, and withheld light',
-        'fantasy' => 'a mythic landscape of weathered stone and open sky, physically grounded',
-        default => $ground === 'light'
-            ? 'a physically believable interior with paper-warm walls and unused space at the edges'
-            : 'a physically believable interior with unused space at the edges of the frame',
+    $environment = match ($metaphor) {
+        'canine-silhouette', 'animal-tracks' => 'open countryside with a distant ridge, packed earth and wind in the grass, unused space at the edges',
+        'mountain-ridge', 'alpine-peak' => 'high alpine terrain under a wide sky, granite faces and weather moving across the slopes',
+        'wild-canopy', 'forest-fringe' => 'a forest edge where canopy light breaks into the understorey, bark and leaf-litter underfoot',
+        'botanical-press' => 'a neglected greenhouse or herbarium table, pressed sheets and living stems sharing the same light',
+        default => match ($family) {
+            'comedy' => 'a sunlit, slightly chaotic interior with paper clutter and generous empty floor around the object',
+            'romance' => 'a weathered coastal interior opening toward hazy shoreline air, linen and salt on every surface',
+            'contemporary' => 'a quiet domestic threshold beside a commuter window, warm indoor light against cooler glass',
+            'adventure' => 'open terrain under a wide sky, packed earth and distant ridgelines, room to travel',
+            'thriller' => 'a compressed interior of glass and shadow, sightlines interrupted',
+            'scifi' => 'an unfamiliar architectural volume, physically built rather than holographic',
+            'horror' => 'a dim threshold where the far room falls out of sight',
+            'mystery' => 'a study of paper, wood, and withheld light',
+            'fantasy' => 'a mythic landscape of weathered stone and open sky, physically grounded',
+            default => $ground === 'light'
+                ? 'a physically believable interior with paper-warm walls and unused space at the edges'
+                : 'a physically believable interior with unused space at the edges of the frame',
+        },
     };
 
     return [
@@ -704,6 +784,13 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'architectural-ruin' => ['ruin', 'building', 'concrete', 'collapse', 'cityscape'],
         'signal' => ['signal', 'radio', 'broadcast', 'frequency', 'message'],
         'silhouette-threshold' => ['figure', 'arrival', 'departure', 'silhouette'],
+        'canine-silhouette' => ['dog', 'dogs', 'canine', 'puppy', 'hound', 'shepherd', 'retriever', 'wolfdog', 'kennel', 'leash'],
+        'animal-tracks' => ['paw', 'paws', 'animal track'],
+        'mountain-ridge' => ['mountain', 'mountains', 'ridge', 'range', 'highland', 'slope'],
+        'alpine-peak' => ['peak', 'summit', 'alpine', 'ascent', 'glacier', 'cliff'],
+        'wild-canopy' => ['canopy', 'forest', 'woods', 'woodland'],
+        'botanical-press' => ['botanical', 'botany', 'garden', 'gardens', 'herbarium', 'pressed', 'greenhouse'],
+        'forest-fringe' => ['orchard', 'vine', 'fern', 'understorey'],
     ];
 
     $materialRules = [
@@ -726,6 +813,12 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'ink' => ['ink', 'print', 'newspaper', 'blueprint'],
         'stone' => ['stone', 'ruin', 'temple', 'grave'],
         'plastic' => ['plastic', 'neon', 'synthetic', 'chrome'],
+        'fur' => ['fur', 'canine', 'puppy', 'hound', 'retriever', 'wolfdog', 'pelt'],
+        'bone' => ['bone', 'skeleton', 'ivory'],
+        'bark' => ['tree bark', 'woodland', 'canopy', 'trunk'],
+        'pressed-leaves' => ['pressed', 'herbarium', 'botanical', 'leaves', 'leaf'],
+        'granite' => ['granite', 'mountain', 'peak', 'summit'],
+        'slate' => ['slate', 'alpine', 'ridge', 'cliff'],
     ];
 
     $pickHits = static function (array $rules, string $text, array $allow = []) {
@@ -788,6 +881,13 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'compass-rose' => 'sand',
         'weathered-door' => 'dust',
         'paired-objects' => 'dust',
+        'canine-silhouette' => 'dust',
+        'animal-tracks' => 'dust',
+        'mountain-ridge' => 'sand',
+        'alpine-peak' => 'dust',
+        'wild-canopy' => 'pollen',
+        'botanical-press' => 'pollen',
+        'forest-fringe' => 'pollen',
     ];
     $lineMap = [
         'fractured-glass' => 'cracks',
@@ -812,6 +912,13 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'compass-rose' => 'contour',
         'weathered-door' => 'horizon',
         'paired-objects' => 'threads',
+        'canine-silhouette' => 'paw-prints',
+        'animal-tracks' => 'paw-prints',
+        'mountain-ridge' => 'fault-lines',
+        'alpine-peak' => 'fault-lines',
+        'wild-canopy' => 'tendrils',
+        'botanical-press' => 'tendrils',
+        'forest-fringe' => 'tendrils',
     ];
 
     $allowedParticles = $grammar['particleSemantics'] ?? FRAMEFLUX_PARTICLE_SEMANTICS;
@@ -829,6 +936,30 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
 
     if (!isTechFamily($family) && in_array($line, FRAMEFLUX_TECH_LINES, true)) {
         $line = pickFromGrammar($allowedLines, $seed + 9);
+    }
+
+    $natureBind = match ($metaphor) {
+        'canine-silhouette', 'animal-tracks' => ['material' => 'fur', 'line' => 'paw-prints', 'human' => 'animal-silhouette', 'texture' => 'fibrous'],
+        'mountain-ridge' => ['material' => 'granite', 'line' => 'fault-lines', 'texture' => 'weathered'],
+        'alpine-peak' => ['material' => 'slate', 'line' => 'fault-lines', 'texture' => 'weathered'],
+        'wild-canopy', 'forest-fringe' => ['material' => 'bark', 'line' => 'tendrils', 'human' => 'flora', 'texture' => 'weathered'],
+        'botanical-press' => ['material' => 'pressed-leaves', 'line' => 'tendrils', 'human' => 'flora', 'texture' => 'fibrous'],
+        default => null,
+    };
+    $natureStory = is_array($natureBind) && match ($metaphor) {
+        'canine-silhouette', 'animal-tracks' => (bool) preg_match('/\b(dog|dogs|canine|puppy|hound|shepherd|retriever|wolfdog|kennel|paw|leash)\b/', $text),
+        'mountain-ridge', 'alpine-peak' => (bool) preg_match('/\b(mountain|mountains|peak|summit|alpine|ridge|cliff|glacier|highland|ascent)\b/', $text),
+        'wild-canopy', 'botanical-press', 'forest-fringe' => (bool) preg_match('/\b(botanical|botany|garden|gardens|forest|woods|woodland|canopy|leaf|leaves|fern|vine|plant|orchard|greenhouse|herbarium|pressed)\b/', $text),
+        default => false,
+    };
+    if (is_array($natureBind) && $natureStory) {
+        if (in_array($natureBind['material'], FRAMEFLUX_MATERIALS, true)) {
+            $material = $natureBind['material'];
+        }
+        if (in_array($natureBind['line'], FRAMEFLUX_LINE_SEMANTICS, true)
+            && (isTechFamily($family) || !in_array($natureBind['line'], FRAMEFLUX_TECH_LINES, true))) {
+            $line = $natureBind['line'];
+        }
     }
 
     $textureMap = [
@@ -851,6 +982,12 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
         'ink' => 'grainy',
         'stone' => 'weathered',
         'plastic' => 'smooth',
+        'fur' => 'fibrous',
+        'bone' => 'weathered',
+        'bark' => 'weathered',
+        'pressed-leaves' => 'fibrous',
+        'granite' => 'weathered',
+        'slate' => 'smooth',
     ];
     $allowedTextures = $grammar['textures'] ?? FRAMEFLUX_TEXTURES;
     $texture = coerceToList(
@@ -893,6 +1030,17 @@ function inferSemanticProfile(string $title, string $genre, string $pitch, int $
     $human = pickFromGrammar(($grammar['humanElements'] ?? []) !== [] ? $grammar['humanElements'] : ['none'], $seed + 37);
     if ($human === '') {
         $human = 'none';
+    }
+    if (is_array($natureBind) && $natureStory && isset($natureBind['human'])
+        && in_array($natureBind['human'], $grammar['humanElements'] ?? FRAMEFLUX_HUMAN_ELEMENTS, true)) {
+        $human = $natureBind['human'];
+    }
+    $letterBind = [
+        'handwritten-letter' => 'letter',
+        'correspondence-clock' => 'letter',
+    ];
+    if (isset($letterBind[$metaphor]) && in_array($letterBind[$metaphor], $grammar['humanElements'] ?? [], true)) {
+        $human = $letterBind[$metaphor];
     }
 
     $energy = (float) ($grammar['narrativeEnergyDefault'] ?? 0.5);
@@ -948,7 +1096,6 @@ function patternForSemantic(array $semantic, int $seed): array
         'architectural-ruin' => 'mesh',
         'orbital-system' => 'rings',
         'keyhole' => 'rings',
-        'map-fold' => 'grid',
         'signal' => 'rings',
         'silhouette-threshold' => 'flow',
         'chaotic-key' => 'flow',
@@ -962,6 +1109,14 @@ function patternForSemantic(array $semantic, int $seed): array
         'paired-objects' => 'particles',
         'postcard' => 'particles',
         'compass-rose' => 'flow',
+        'canine-silhouette' => 'sunburst',
+        'animal-tracks' => 'particles',
+        'mountain-ridge' => 'hatching',
+        'alpine-peak' => 'sunburst',
+        'wild-canopy' => 'marbling',
+        'botanical-press' => 'creases',
+        'forest-fringe' => 'hatching',
+        'map-fold' => 'creases',
     ];
     $primary = $primaryMap[$metaphor] ?? pickFromGrammar($allowed, $seed);
     if ($spatial === 'fragmented' || $spatial === 'collapsing') {
@@ -1077,6 +1232,11 @@ function inferTypographyDirection(array $semantic, string $genre, int $seed): ar
         'concrete' => 'extended',
         'stone' => 'extended',
         'wood' => 'slab-serif',
+        'bark' => 'slab-serif',
+        'granite', 'slate' => 'extended',
+        'fur' => 'grotesque',
+        'bone' => 'distressed',
+        'pressed-leaves' => 'classical-serif',
         'smoke', 'dust' => 'distressed',
         default => 'grotesque',
     };
@@ -1621,7 +1781,8 @@ function normalizeParams(array $params, string $title, string $genre, string $pi
     $suppliedBg = sanitizeHex((string) ($paletteIn['background'] ?? ''), '');
     if ($suppliedBg !== '') {
         $lum = hexLuminance($suppliedBg);
-        if (($groundTone === 'light' && $lum < 0.38) || ($groundTone === 'dark' && $lum > 0.55)) {
+        $storyLight = storySupportsAtmosphericLight($title, $genre, $pitch);
+        if (!$storyLight && (($groundTone === 'light' && $lum < 0.38) || ($groundTone === 'dark' && $lum > 0.55))) {
             $preset = paletteFromGrammar($grammar, abs(crc32($title . '|' . $family)));
             $background = $preset['bg'];
             $primaryColor = $preset['acc'];
@@ -1935,12 +2096,28 @@ STORY FIRST, THEN GRAMMAR:
 - Interpret the story: emotional core, conflict, stakes, environment, motifs. Do not illustrate only the literal plot.
 - Genre is a visual grammar, not a colour, texture, or centred-object preset.
 - Choose composition.mode from the story (duality → split-field, journey → edge-flow or diagonal, object/threshold → framed-object, restraint → quiet-minimal, layered information → editorial, kinetic conflict → diagonal, title as identity → type-dominant). Do not default to central-focus.
-- Choose procedural.primaryPattern / secondaryPattern from meaning (flow for movement, particles for atmosphere/chaos, rings for cycles, grid/mesh only when the story is systemic or technological). Density is a number 0.20–0.85. negativeSpace is a number 0.15–0.85.
+- Choose procedural.primaryPattern / secondaryPattern from meaning:
+  flow for movement and organic drift;
+  particles for atmosphere, pollen, dust, chaos;
+  rings for cycles, orbits, and recurrences;
+  grid/mesh only when the story is systemic or technological;
+  halftone for print-process rhythm, comedy, musicals, animation, and graphic tactility;
+  hatching for woodcut/engraving marks, terrain, adventure, historical, and geological tension;
+  creases for folded paper, maps, letters, pressed sheets, and material deformation;
+  marbling for viscous organic swirl, romance, contemporary interiors, and living canopies;
+  sunburst for sunrise, revelation, spectacle, energy, and watchful animal or alpine silhouettes.
+  Density is a number 0.20–0.85. negativeSpace is a number 0.15–0.85.
 - Do not always pair flow+grid or grid+mesh.
+- Nature and animal stories MUST use the matching controlled vocabulary when the story supports it:
+  canine/dog → canine-silhouette or animal-tracks, fur or bone, paw-prints, animal-silhouette;
+  mountains/peaks/alpine → mountain-ridge or alpine-peak, granite or slate, fault-lines;
+  botanical/garden/forest → botanical-press, wild-canopy, or forest-fringe, bark or pressed-leaves, tendrils, flora.
+  Do not convert a nature story into a generic human studio portrait.
+- Do not treat halftone, hatching, creases, marbling, or sunburst as technology. grid and mesh remain the only technical patterns reserved for thriller, scifi, and horror.
 
 TEXTLESS CINEMATIC PLATE:
 - cinematic.subject and cinematic.environment describe a cinematic still photograph for a movie, NOT a poster.
-- The image model never renders typography. Do not mention title placement, taglines, quotes, logos, credits, captions, HUD, UI, lettering, or reserved space for type.
+- The image model never renders typography. Do not mention title placement, taglines, quotes, logos, credits, captions, HUD, UI, lettering, reserved space for type, REF:// labels, or reference identifiers.
 - Language equivalent to: no typography, no titles, no captions, no logos, no credits, no UI — as a constraint, not as something to draw.
 - Typography exists only under typography.title and typography.quote. typography.genreVisibility must be exactly "hidden".
 

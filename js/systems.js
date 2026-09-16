@@ -399,8 +399,12 @@
     }
   }
 
+  function shouldDrawRefLabel(dna) {
+    return !!(dna && dna.debug && dna.debug.refLabel);
+  }
+
   function drawRefLabel(p, dna, seed, plan) {
-    if (!plan.ref) {
+    if (!shouldDrawRefLabel(dna) || !plan.ref) {
       return;
     }
     const pal = dna.palette || {};
@@ -465,6 +469,7 @@
     drawCentralFrame,
     drawConnectionLines,
     drawStatusColumn,
+    shouldDrawRefLabel,
     drawRefLabel,
     drawPrintFinish,
     MARGIN,

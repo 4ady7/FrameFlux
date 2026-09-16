@@ -476,7 +476,10 @@ function anchorScale(dna, seed) {
 
 function protectionWeight(u, v, dna, spec) {
   let w = 1;
-  if (inRect(u, v, spec.titleSafe)) {
+  if (spec.titleSafe && inRect(u, v, spec.titleSafe)) {
+    w *= 0.12;
+  }
+  if (spec.quoteSafe && inRect(u, v, spec.quoteSafe)) {
     w *= 0.12;
   }
   const fx = Number(dna.anchors?.focalX ?? dnaComp(dna).focalX ?? 0.5);
@@ -516,12 +519,13 @@ function drawMaterialGrain(p, dna, seed, intensity) {
   p.randomSeed(seed + 401);
   p.noiseSeed(seed + 401);
 
-  const papery = ["paper", "cardstock", "linen", "fabric", "ink"].includes(material);
-  const hide = ["leather", "wood"].includes(material);
+  const papery = ["paper", "cardstock", "linen", "fabric", "ink", "pressed-leaves"].includes(material);
+  const hide = ["leather", "wood", "fur", "bark", "bone"].includes(material);
   const metallic = ["metal", "brass", "foil", "rust"].includes(material);
   const glassy = ["glass", "plastic"].includes(material);
+  const stony = ["stone", "granite", "slate"].includes(material);
 
-  const count = papery ? 3400 : hide ? 2200 : metallic ? 1600 : glassy ? 900 : 1800;
+  const count = papery ? 3400 : hide ? 2200 : metallic ? 1600 : glassy ? 900 : stony ? 2000 : 1800;
   const alphaBase = 8 + intensity * 16;
   for (let i = 0; i < count; i += 1) {
     const x = p.random(POSTER_W);
@@ -567,7 +571,7 @@ function drawMaterialGrain(p, dna, seed, intensity) {
     p.rect(8, 8, POSTER_W - 16, POSTER_H - 16);
   }
 
-  if (material === "leather" || material === "wood") {
+  if (material === "leather" || material === "wood" || material === "bark") {
     p.noFill();
     p.stroke(...ink, 22);
     p.strokeWeight(1.1);
@@ -678,6 +682,163 @@ function drawDirectionalLight(p, dna, seed, fx, fy) {
   p.drawingContext.fillStyle = shade;
   p.drawingContext.fillRect(0, 0, POSTER_W, POSTER_H);
   p.drawingContext.restore();
+}
+
+function drawMountainAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg) {
+  p.rectMode(p.CORNER);
+  const alpine = metaphor === "alpine-peak";
+  const planes = alpine
+    ? [
+        { pts: [-0.42, 0.22, -0.18, -0.08, 0.02, 0.22], shade: secondary, alpha: 150 },
+        { pts: [-0.22, 0.22, 0.0, -0.28, 0.28, 0.22], shade: primary, alpha: 210 },
+        { pts: [0.04, 0.22, 0.22, -0.12, 0.46, 0.22], shade: accent, alpha: 130 },
+        { pts: [-0.06, 0.22, 0.08, -0.02, 0.22, 0.22], shade: bg, alpha: 90 },
+      ]
+    : [
+        { pts: [-0.48, 0.24, -0.3, 0.02, -0.08, 0.24], shade: secondary, alpha: 140 },
+        { pts: [-0.32, 0.24, -0.08, -0.18, 0.18, 0.24], shade: primary, alpha: 200 },
+        { pts: [-0.02, 0.24, 0.16, -0.06, 0.4, 0.24], shade: accent, alpha: 120 },
+        { pts: [0.12, 0.24, 0.32, 0.04, 0.52, 0.24], shade: secondary, alpha: 100 },
+      ];
+  for (const plane of planes) {
+    p.noStroke();
+    p.fill(...plane.shade, plane.alpha * emphasis);
+    p.beginShape();
+    p.vertex(POSTER_W * plane.pts[0] * scale, POSTER_H * plane.pts[1] * scale);
+    p.vertex(POSTER_W * plane.pts[2] * scale, POSTER_H * plane.pts[3] * scale);
+    p.vertex(POSTER_W * plane.pts[4] * scale, POSTER_H * plane.pts[5] * scale);
+    p.endShape(p.CLOSE);
+  }
+  p.stroke(...accent, 160 * emphasis);
+  p.strokeWeight(alpine ? 2.2 : 1.6);
+  p.noFill();
+  p.beginShape();
+  const ridge = alpine
+    ? [-0.42, 0.22, -0.18, -0.08, 0.0, -0.28, 0.22, -0.12, 0.46, 0.22]
+    : [-0.48, 0.24, -0.3, 0.02, -0.08, -0.18, 0.16, -0.06, 0.32, 0.04, 0.52, 0.24];
+  for (let i = 0; i < ridge.length; i += 2) {
+    p.vertex(POSTER_W * ridge[i] * scale, POSTER_H * ridge[i + 1] * scale);
+  }
+  p.endShape();
+  p.stroke(...primary, 90 * emphasis);
+  p.strokeWeight(1);
+  p.line(POSTER_W * -0.08 * scale, POSTER_H * -0.18 * scale, POSTER_W * -0.02 * scale, POSTER_H * 0.2 * scale);
+  p.line(POSTER_W * 0.04 * scale, POSTER_H * -0.22 * scale, POSTER_W * 0.1 * scale, POSTER_H * 0.18 * scale);
+}
+
+function drawCanineAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg, fx) {
+  const facing = fx < 0.5 ? 1 : -1;
+  p.push();
+  p.scale(facing, 1);
+  p.noStroke();
+  p.fill(...primary, 210 * emphasis);
+  p.beginShape();
+  p.vertex(POSTER_W * -0.18 * scale, POSTER_H * 0.16 * scale);
+  p.vertex(POSTER_W * -0.16 * scale, POSTER_H * -0.02 * scale);
+  p.vertex(POSTER_W * -0.02 * scale, POSTER_H * -0.08 * scale);
+  p.vertex(POSTER_W * 0.12 * scale, POSTER_H * -0.04 * scale);
+  p.vertex(POSTER_W * 0.22 * scale, POSTER_H * 0.02 * scale);
+  p.vertex(POSTER_W * 0.18 * scale, POSTER_H * 0.08 * scale);
+  p.vertex(POSTER_W * 0.08 * scale, POSTER_H * 0.06 * scale);
+  p.vertex(POSTER_W * 0.04 * scale, POSTER_H * 0.18 * scale);
+  p.vertex(POSTER_W * -0.04 * scale, POSTER_H * 0.18 * scale);
+  p.vertex(POSTER_W * -0.08 * scale, POSTER_H * 0.08 * scale);
+  p.endShape(p.CLOSE);
+  p.fill(...secondary, 220 * emphasis);
+  p.triangle(
+    POSTER_W * -0.02 * scale,
+    POSTER_H * -0.08 * scale,
+    POSTER_W * -0.08 * scale,
+    POSTER_H * -0.22 * scale,
+    POSTER_W * 0.06 * scale,
+    POSTER_H * -0.1 * scale
+  );
+  p.fill(...accent, 180 * emphasis);
+  p.triangle(
+    POSTER_W * 0.12 * scale,
+    POSTER_H * -0.04 * scale,
+    POSTER_W * 0.28 * scale,
+    POSTER_H * -0.02 * scale,
+    POSTER_W * 0.18 * scale,
+    POSTER_H * 0.06 * scale
+  );
+  p.fill(...bg, 200);
+  p.ellipse(POSTER_W * 0.08 * scale, POSTER_H * -0.01 * scale, POSTER_W * 0.028 * scale, POSTER_H * 0.02 * scale);
+  p.stroke(...accent, 140 * emphasis);
+  p.strokeWeight(2);
+  p.noFill();
+  p.beginShape();
+  p.vertex(POSTER_W * -0.16 * scale, POSTER_H * 0.04 * scale);
+  p.quadraticVertex(
+    POSTER_W * -0.32 * scale,
+    POSTER_H * 0.0 * scale,
+    POSTER_W * -0.28 * scale,
+    POSTER_H * 0.14 * scale
+  );
+  p.endShape();
+  p.pop();
+  if (metaphor === "animal-tracks") {
+    p.noStroke();
+    p.fill(...accent, 140 * emphasis);
+    for (let i = 0; i < 5; i += 1) {
+      const tx = POSTER_W * (-0.22 + i * 0.1) * scale;
+      const ty = POSTER_H * (0.2 + (i % 2) * 0.03) * scale;
+      p.ellipse(tx, ty, 10 * scale, 14 * scale);
+      p.ellipse(tx - 6 * scale, ty - 8 * scale, 4 * scale, 5 * scale);
+      p.ellipse(tx + 5 * scale, ty - 8 * scale, 4 * scale, 5 * scale);
+    }
+  }
+}
+
+function drawBotanicalAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg) {
+  const pressed = metaphor === "botanical-press";
+  const fringe = metaphor === "forest-fringe";
+  p.stroke(...primary, 180 * emphasis);
+  p.strokeWeight(pressed ? 1.2 : 1.8);
+  p.noFill();
+  const stems = fringe ? 7 : pressed ? 5 : 6;
+  for (let i = 0; i < stems; i += 1) {
+    const lean = (i - (stems - 1) / 2) * (pressed ? 0.28 : 0.18);
+    let x = POSTER_W * lean * 0.12 * scale;
+    let y = POSTER_H * 0.18 * scale;
+    p.beginShape();
+    const steps = pressed ? 14 : 22;
+    for (let s = 0; s < steps; s += 1) {
+      p.vertex(x, y);
+      const n = p.noise(i * 0.4, s * 0.16);
+      x += (n - 0.5 + lean) * (pressed ? 7 : 9) * scale;
+      y -= (pressed ? 8 : 11) * scale;
+    }
+    p.endShape();
+    p.stroke(...(i % 2 ? accent : secondary), 150 * emphasis);
+    p.strokeWeight(pressed ? 1 : 1.4);
+    const leaflets = pressed ? 4 : 6;
+    for (let L = 1; L <= leaflets; L += 1) {
+      const t = L / (leaflets + 1);
+      const lx = POSTER_W * lean * 0.12 * scale + (p.noise(i, L) - 0.5) * 20 * scale;
+      const ly = POSTER_H * (0.16 - t * 0.28) * scale;
+      const dir = L % 2 === 0 ? 1 : -1;
+      p.beginShape();
+      p.vertex(lx, ly);
+      p.quadraticVertex(
+        lx + dir * 18 * scale,
+        ly - 10 * scale,
+        lx + dir * 6 * scale,
+        ly - 22 * scale
+      );
+      p.endShape();
+      if (!pressed) {
+        p.line(lx, ly, lx + dir * 14 * scale, ly - 8 * scale);
+      }
+    }
+  }
+  if (pressed) {
+    p.noFill();
+    p.stroke(...accent, 90 * emphasis);
+    p.strokeWeight(1);
+    p.rectMode(p.CENTER);
+    p.rect(0, POSTER_H * 0.02 * scale, POSTER_W * 0.42 * scale, POSTER_H * 0.36 * scale);
+  }
 }
 
 function drawNarrativeAnchor(p, dna, seed, fx, fy) {
@@ -1123,6 +1284,12 @@ function drawNarrativeAnchor(p, dna, seed, fx, fy) {
       p.fill(...accent, 70);
       p.ellipse(0, POSTER_H * 0.1 * scale, POSTER_W * 0.2 * scale, POSTER_H * 0.06 * scale);
     }
+  } else if (metaphor === "mountain-ridge" || metaphor === "alpine-peak") {
+    drawMountainAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg);
+  } else if (metaphor === "canine-silhouette" || metaphor === "animal-tracks") {
+    drawCanineAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg, fx);
+  } else if (metaphor === "wild-canopy" || metaphor === "botanical-press" || metaphor === "forest-fringe") {
+    drawBotanicalAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg);
   } else {
     // silhouette-threshold default — figure at a doorway / threshold
     p.noStroke();
@@ -1195,6 +1362,31 @@ function drawHumanTraces(p, dna, seed, fx, fy) {
     p.noStroke();
     p.fill(...accent, 200);
     p.rect(nx(0.82), ny(0.22), 86, 28, 3);
+  } else if (kind === "animal-silhouette") {
+    p.noStroke();
+    p.fill(...primary, 150);
+    p.beginShape();
+    const ax = nx(0.18);
+    const ay = ny(0.78);
+    p.vertex(ax, ay);
+    p.vertex(ax + 18, ay - 22);
+    p.vertex(ax + 42, ay - 16);
+    p.vertex(ax + 58, ay - 8);
+    p.vertex(ax + 48, ay + 6);
+    p.vertex(ax + 22, ay + 8);
+    p.endShape(p.CLOSE);
+    p.triangle(ax + 18, ay - 22, ax + 10, ay - 40, ax + 28, ay - 20);
+  } else if (kind === "flora") {
+    p.noFill();
+    p.stroke(...accent, 120);
+    p.strokeWeight(1.4);
+    const fx0 = nx(0.82);
+    const fy0 = ny(0.76);
+    p.line(fx0, fy0 + 28, fx0, fy0 - 24);
+    for (let i = 0; i < 5; i += 1) {
+      const dir = i % 2 === 0 ? -1 : 1;
+      p.bezier(fx0, fy0 - i * 8, fx0 + dir * 18, fy0 - i * 8 - 6, fx0 + dir * 22, fy0 - i * 8 - 16, fx0 + dir * 8, fy0 - i * 8 - 22);
+    }
   }
   if (kind === "letter" || family === "contemporary" || family === "romance") {
     p.noFill();
@@ -1440,6 +1632,12 @@ function drawFlowField(p, dna, seed, sampler, spec, weight) {
         angle = n * 4 + Math.sin(s * 1.7) * 1.2;
       } else if (lineKind === "contour") {
         angle = Math.sin(y * 0.02 + i) * 0.6 + 0.2;
+      } else if (lineKind === "tendrils") {
+        angle = n * p.TWO_PI * 1.6 + Math.sin(s * 0.55 + i) * 0.9 + edgeBias;
+      } else if (lineKind === "fault-lines") {
+        angle = Math.round(angle / (p.HALF_PI / 3)) * (p.HALF_PI / 3) + (n - 0.5) * 0.22;
+      } else if (lineKind === "paw-prints") {
+        angle = 0.4 + Math.sin(s * 0.8 + i) * 0.5 + (n - 0.5) * 0.4;
       }
       const step =
         lineKind === "cracks"
@@ -1647,23 +1845,220 @@ function drawMesh(p, dna, seed, sampler, spec, weight) {
   }
 }
 
+function drawHalftone(p, dna, seed, sampler, spec, weight) {
+  const pal = dnaPalette(dna);
+  const density = dnaProc(dna).density || 0.6;
+  const cols = Math.floor(18 + density * 16);
+  const rows = Math.floor(26 + density * 18);
+  const cellW = POSTER_W / cols;
+  const cellH = POSTER_H / rows;
+  p.randomSeed(seed + 17);
+  p.noiseSeed(seed + 17);
+  p.noStroke();
+  const ink = hexToRgb(pal.primary);
+  const acc = hexToRgb(pal.accent);
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const jitter = (p.noise(x * 0.18, y * 0.18) - 0.5) * cellW * 0.35;
+      const u = (x + 0.5) / cols;
+      const v = (y + 0.5) / rows;
+      const protect = protectionWeight(u, v, dna, spec);
+      if (protect < 0.2) {
+        continue;
+      }
+      const lum = sampler.at(u, v);
+      const cluster = p.noise(x * 0.09, y * 0.09);
+      if (cluster < 0.28 && lum > 0.62) {
+        continue;
+      }
+      const r = (0.35 + (1 - lum) * 0.9 + cluster * 0.25) * Math.min(cellW, cellH) * 0.48 * weight * protect;
+      if (r < 0.6) {
+        continue;
+      }
+      p.fill(...(y % 3 === 0 ? acc : ink), 70 + (1 - lum) * 90);
+      p.circle(x * cellW + cellW / 2 + jitter, y * cellH + cellH / 2, r * 2);
+    }
+  }
+}
+
+function drawHatching(p, dna, seed, sampler, spec, weight) {
+  const pal = dnaPalette(dna);
+  const density = dnaProc(dna).density || 0.6;
+  const lineKind = dnaSemantic(dna).lineSemantics || "threads";
+  const baseAngle = lineKind === "fault-lines" ? -0.7 : lineKind === "tendrils" ? 0.4 : -0.45;
+  const count = Math.floor(42 + density * 50);
+  p.randomSeed(seed + 29);
+  p.noiseSeed(seed + 29);
+  p.noFill();
+  for (let i = 0; i < count; i += 1) {
+    const v0 = i / count;
+    const u0 = p.noise(i * 0.07);
+    const protect = protectionWeight(u0, v0, dna, spec);
+    if (protect < 0.2) {
+      continue;
+    }
+    const lum = sampler.at(u0, v0);
+    const local = 0.35 + (1 - lum) * 0.8;
+    const spacing = (8 + (1 - density) * 10) / local;
+    const angle = baseAngle + (p.noise(i * 0.2) - 0.5) * 0.35;
+    const cross = p.noise(i * 0.11) > 0.72;
+    p.stroke(...hexToRgb(i % 2 ? pal.primary : pal.secondary), 70 * protect * weight);
+    p.strokeWeight(lineKind === "fault-lines" ? 1.4 : 0.9);
+    const x = u0 * POSTER_W;
+    const y = v0 * POSTER_H;
+    const len = POSTER_W * (0.18 + density * 0.28) * protect;
+    p.line(x - Math.cos(angle) * len, y - Math.sin(angle) * len, x + Math.cos(angle) * len, y + Math.sin(angle) * len);
+    if (cross && protect > 0.45) {
+      const a2 = angle + p.HALF_PI * 0.92;
+      p.stroke(...hexToRgb(pal.accent), 45 * protect * weight);
+      p.line(x - Math.cos(a2) * len * 0.55, y - Math.sin(a2) * len * 0.55, x + Math.cos(a2) * len * 0.55, y + Math.sin(a2) * len * 0.55);
+    }
+    if (spacing > 40) {
+      i += 1;
+    }
+  }
+}
+
+function drawCreases(p, dna, seed, sampler, spec, weight) {
+  const pal = dnaPalette(dna);
+  const density = dnaProc(dna).density || 0.6;
+  const folds = Math.floor(8 + density * 10);
+  p.randomSeed(seed + 41);
+  p.noiseSeed(seed + 41);
+  p.noFill();
+  for (let i = 0; i < folds; i += 1) {
+    const u = p.noise(i * 0.31, 0.2);
+    const v = p.noise(0.4, i * 0.27);
+    if (protectionWeight(u, v, dna, spec) < 0.22) {
+      continue;
+    }
+    const lum = sampler.at(u, v);
+    const clusters = 2 + Math.floor((1 - lum) * 3);
+    p.stroke(...hexToRgb(i % 2 ? pal.primary : pal.accent), 85 * weight);
+    p.strokeWeight(1.1 + (1 - lum));
+    for (let c = 0; c < clusters; c += 1) {
+      let x = u * POSTER_W + (c - 1) * 8;
+      let y = v * POSTER_H;
+      p.beginShape();
+      for (let s = 0; s < 18; s += 1) {
+        const uu = x / POSTER_W;
+        const vv = y / POSTER_H;
+        const protect = protectionWeight(uu, vv, dna, spec);
+        if (protect < 0.18) {
+          break;
+        }
+        p.vertex(x, y);
+        const n = p.noise(i, s * 0.2 + c);
+        const turn = Math.round((n - 0.5) * 4) * 0.55;
+        x += Math.cos(turn) * 14;
+        y += Math.sin(turn + 0.4) * 16;
+      }
+      p.endShape();
+    }
+  }
+}
+
+function drawMarbling(p, dna, seed, sampler, spec, weight) {
+  const pal = dnaPalette(dna);
+  const density = dnaProc(dna).density || 0.6;
+  const ribbons = Math.floor(7 + density * 8);
+  p.randomSeed(seed + 53);
+  p.noiseSeed(seed + 53);
+  p.noFill();
+  for (let i = 0; i < ribbons; i += 1) {
+    const t = i / ribbons;
+    let x = POSTER_W * (0.08 + t * 0.84);
+    let y = POSTER_H * (0.12 + p.noise(i) * 0.7);
+    const col = t < 0.33 ? pal.primary : t < 0.66 ? pal.secondary : pal.accent;
+    p.stroke(...hexToRgb(col), 70 * weight);
+    p.strokeWeight(1.6 + (i % 3));
+    p.beginShape();
+    for (let s = 0; s < 64; s += 1) {
+      const u = x / POSTER_W;
+      const v = y / POSTER_H;
+      const protect = protectionWeight(u, v, dna, spec);
+      if (protect < 0.18) {
+        p.endShape();
+        p.beginShape();
+        x += 10;
+        y += (p.noise(i, s * 0.05) - 0.5) * 18;
+        continue;
+      }
+      p.vertex(x, y);
+      const lum = sampler.at(u, v);
+      const swirl = p.noise(x * 0.003, y * 0.003) * p.TWO_PI;
+      const amp = 4.2 + (1 - lum) * 3.4;
+      x += Math.cos(swirl + s * 0.08 + i) * amp;
+      y += Math.sin(swirl * 1.4 + i * 0.5) * amp * 0.85;
+      if (x < -30 || x > POSTER_W + 30 || y < -30 || y > POSTER_H + 30) {
+        break;
+      }
+    }
+    p.endShape();
+  }
+}
+
+function drawSunburst(p, dna, seed, sampler, spec, weight) {
+  const pal = dnaPalette(dna);
+  const density = dnaProc(dna).density || 0.6;
+  const fx = Number(dna.anchors?.focalX ?? dnaComp(dna).focalX ?? 0.5);
+  const fy = Number(dna.anchors?.focalY ?? dnaComp(dna).focalY ?? 0.42);
+  const rays = Math.floor(16 + density * 18);
+  p.randomSeed(seed + 67);
+  p.noiseSeed(seed + 67);
+  p.noFill();
+  const cx = nx(fx);
+  const cy = ny(fy);
+  for (let i = 0; i < rays; i += 1) {
+    const a = (i / rays) * p.TWO_PI + (p.noise(i) - 0.5) * 0.12;
+    const irregular = 0.72 + p.noise(i * 0.3) * 0.45;
+    p.stroke(...hexToRgb(i % 2 ? pal.accent : pal.primary), 55 * weight);
+    p.strokeWeight(i % 4 === 0 ? 2.1 : 1.05);
+    p.beginShape();
+    for (let s = 4; s < 42; s += 1) {
+      const r = s * 9 * irregular;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r;
+      const u = x / POSTER_W;
+      const v = y / POSTER_H;
+      if (u < 0 || u > 1 || v < 0 || v > 1) {
+        break;
+      }
+      const protect = protectionWeight(u, v, dna, spec);
+      if (protect < 0.18) {
+        break;
+      }
+      const lum = sampler.at(Math.min(1, Math.max(0, u)), Math.min(1, Math.max(0, v)));
+      if (s > 18 + lum * 16) {
+        break;
+      }
+      p.vertex(x, y);
+    }
+    p.endShape();
+  }
+}
+
+const PATTERN_RENDERERS = {
+  flow: drawFlowField,
+  grid: drawGrid,
+  particles: drawParticles,
+  rings: drawRings,
+  mesh: drawMesh,
+  halftone: drawHalftone,
+  hatching: drawHatching,
+  creases: drawCreases,
+  marbling: drawMarbling,
+  sunburst: drawSunburst,
+};
+
 function drawPattern(p, name, dna, seed, sampler, spec, weight) {
   const family = grammarFamily(dna);
   if (!isTechFamily(family) && (name === "grid" || name === "mesh")) {
     drawFlowField(p, dna, seed, sampler, spec, weight);
     return;
   }
-  if (name === "grid") {
-    drawGrid(p, dna, seed, sampler, spec, weight);
-  } else if (name === "particles") {
-    drawParticles(p, dna, seed, sampler, spec, weight);
-  } else if (name === "rings") {
-    drawRings(p, dna, seed, sampler, spec, weight);
-  } else if (name === "mesh") {
-    drawMesh(p, dna, seed, sampler, spec, weight);
-  } else {
-    drawFlowField(p, dna, seed, sampler, spec, weight);
-  }
+  const renderer = PATTERN_RENDERERS[name] || drawFlowField;
+  renderer(p, dna, seed, sampler, spec, weight);
 }
 
 function patternPlan(dna, role) {

@@ -130,7 +130,7 @@ Pitch: {$pitch}
 Previous Visual DNA (whitelisted):
 {$prevJson}
 PROMPT;
-        $system = 'You refine one nested FrameFlux Visual DNA v1.3 object. Keep a single semantic source of truth. Stay inside the allowed enums. Cinematic subject and environment remain a textless still photograph, never a poster. typography.genreVisibility is hidden. narrativeAnchor equals visualMetaphor. Return JSON only.';
+        $system = 'You refine one nested FrameFlux Visual DNA v1.3 object. Keep a single semantic source of truth. Stay inside the allowed enums. Cinematic subject and environment remain a textless still photograph, never a poster, and must not include REF:// labels. Wildlife and nature subjects are allowed when the story selects them. typography.genreVisibility is hidden. narrativeAnchor equals visualMetaphor. Return JSON only.';
         $temperature = 0.85;
     } elseif ($mode === 'reimagine' && $previous !== null) {
         $prevJson = json_encode($previous, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
@@ -153,7 +153,7 @@ Pitch: {$pitch}
 Previous Visual DNA (whitelisted) — do not copy it:
 {$prevJson}
 PROMPT;
-        $system = 'You reimagine one nested FrameFlux Visual DNA v1.3 object for the same film. One DNA only. Stay inside the allowed enums. Cinematic subject and environment remain a textless still photograph, never a poster. typography.genreVisibility is hidden. narrativeAnchor equals visualMetaphor. Return JSON only.';
+        $system = 'You reimagine one nested FrameFlux Visual DNA v1.3 object for the same film. One DNA only. Stay inside the allowed enums. Cinematic subject and environment remain a textless still photograph, never a poster, and must not include REF:// labels. Wildlife and nature subjects are allowed when the story selects them. typography.genreVisibility is hidden. narrativeAnchor equals visualMetaphor. Return JSON only.';
         $temperature = 1.05;
     } else {
         $prompt = <<<PROMPT
@@ -170,7 +170,7 @@ Film title: {$title}
 Genre: {$genre}
 Pitch: {$pitch}
 PROMPT;
-        $system = 'You convert film concepts into one nested Visual DNA v1.3 object for a hybrid cinematic / procedural poster system. One film equals one semantic DNA. Never invent enums. Never ask the image model to render typography. Return JSON only.';
+        $system = 'You convert film concepts into one nested Visual DNA v1.3 object for a hybrid cinematic / procedural poster system. One film equals one semantic DNA. Never invent enums. Never ask the image model to render typography or REF:// labels. Nature, wildlife, canine, mountain, and botanical subjects are allowed when the story selects them. Return JSON only.';
         $temperature = 1.05;
     }
 
