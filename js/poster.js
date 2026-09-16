@@ -687,43 +687,40 @@ function drawDirectionalLight(p, dna, seed, fx, fy) {
 function drawMountainAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg) {
   p.rectMode(p.CORNER);
   const alpine = metaphor === "alpine-peak";
-  const planes = alpine
-    ? [
-        { pts: [-0.42, 0.22, -0.18, -0.08, 0.02, 0.22], shade: secondary, alpha: 150 },
-        { pts: [-0.22, 0.22, 0.0, -0.28, 0.28, 0.22], shade: primary, alpha: 210 },
-        { pts: [0.04, 0.22, 0.22, -0.12, 0.46, 0.22], shade: accent, alpha: 130 },
-        { pts: [-0.06, 0.22, 0.08, -0.02, 0.22, 0.22], shade: bg, alpha: 90 },
-      ]
-    : [
-        { pts: [-0.48, 0.24, -0.3, 0.02, -0.08, 0.24], shade: secondary, alpha: 140 },
-        { pts: [-0.32, 0.24, -0.08, -0.18, 0.18, 0.24], shade: primary, alpha: 200 },
-        { pts: [-0.02, 0.24, 0.16, -0.06, 0.4, 0.24], shade: accent, alpha: 120 },
-        { pts: [0.12, 0.24, 0.32, 0.04, 0.52, 0.24], shade: secondary, alpha: 100 },
-      ];
-  for (const plane of planes) {
+  const j = (n) => (p.noise(n * 0.37) - 0.5) * 0.05;
+  const far = alpine
+    ? [-0.46 + j(1), 0.23, -0.22 + j(2), -0.02, 0.08 + j(3), 0.23]
+    : [-0.52 + j(1), 0.26, -0.28 + j(2), 0.04, -0.02 + j(3), 0.26];
+  const mid = alpine
+    ? [-0.26 + j(4), 0.23, -0.04 + j(5), -0.3, 0.22 + j(6), -0.08, 0.34 + j(7), 0.23]
+    : [-0.34 + j(4), 0.25, -0.12 + j(5), -0.2, 0.1 + j(6), -0.04, 0.28 + j(7), 0.25];
+  const near = alpine
+    ? [-0.08 + j(8), 0.23, 0.1 + j(9), -0.14, 0.3 + j(10), 0.06, 0.48 + j(11), 0.23]
+    : [0.0 + j(8), 0.25, 0.18 + j(9), -0.08, 0.36 + j(10), 0.08, 0.54 + j(11), 0.25];
+  const drawMass = (pts, fillCol, alpha, strokeCol) => {
     p.noStroke();
-    p.fill(...plane.shade, plane.alpha * emphasis);
+    p.fill(...fillCol, alpha * emphasis);
     p.beginShape();
-    p.vertex(POSTER_W * plane.pts[0] * scale, POSTER_H * plane.pts[1] * scale);
-    p.vertex(POSTER_W * plane.pts[2] * scale, POSTER_H * plane.pts[3] * scale);
-    p.vertex(POSTER_W * plane.pts[4] * scale, POSTER_H * plane.pts[5] * scale);
+    for (let i = 0; i < pts.length; i += 2) {
+      p.vertex(POSTER_W * pts[i] * scale, POSTER_H * pts[i + 1] * scale);
+    }
     p.endShape(p.CLOSE);
-  }
-  p.stroke(...accent, 160 * emphasis);
-  p.strokeWeight(alpine ? 2.2 : 1.6);
-  p.noFill();
-  p.beginShape();
-  const ridge = alpine
-    ? [-0.42, 0.22, -0.18, -0.08, 0.0, -0.28, 0.22, -0.12, 0.46, 0.22]
-    : [-0.48, 0.24, -0.3, 0.02, -0.08, -0.18, 0.16, -0.06, 0.32, 0.04, 0.52, 0.24];
-  for (let i = 0; i < ridge.length; i += 2) {
-    p.vertex(POSTER_W * ridge[i] * scale, POSTER_H * ridge[i + 1] * scale);
-  }
-  p.endShape();
-  p.stroke(...primary, 90 * emphasis);
+    p.noFill();
+    p.stroke(...strokeCol, 140 * emphasis);
+    p.strokeWeight(alpine ? 1.8 : 1.4);
+    p.beginShape();
+    for (let i = 0; i < pts.length - 2; i += 2) {
+      p.vertex(POSTER_W * pts[i] * scale, POSTER_H * pts[i + 1] * scale);
+    }
+    p.endShape();
+  };
+  drawMass(far, secondary, 120, secondary);
+  drawMass(mid, primary, 205, accent);
+  drawMass(near, accent, 110, primary);
+  p.stroke(...bg, 70 * emphasis);
   p.strokeWeight(1);
-  p.line(POSTER_W * -0.08 * scale, POSTER_H * -0.18 * scale, POSTER_W * -0.02 * scale, POSTER_H * 0.2 * scale);
-  p.line(POSTER_W * 0.04 * scale, POSTER_H * -0.22 * scale, POSTER_W * 0.1 * scale, POSTER_H * 0.18 * scale);
+  p.line(POSTER_W * mid[2] * scale, POSTER_H * mid[3] * scale, POSTER_W * (mid[2] + 0.05) * scale, POSTER_H * 0.2 * scale);
+  p.line(POSTER_W * near[2] * scale, POSTER_H * near[3] * scale, POSTER_W * (near[2] + 0.04) * scale, POSTER_H * 0.18 * scale);
 }
 
 function drawCanineAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg, fx) {
@@ -793,8 +790,8 @@ function drawCanineAnchor(p, metaphor, scale, emphasis, primary, secondary, acce
 function drawBotanicalAnchor(p, metaphor, scale, emphasis, primary, secondary, accent, bg) {
   const pressed = metaphor === "botanical-press";
   const fringe = metaphor === "forest-fringe";
-  p.stroke(...primary, 180 * emphasis);
-  p.strokeWeight(pressed ? 1.2 : 1.8);
+  p.stroke(...primary, 220 * emphasis);
+  p.strokeWeight(pressed ? 1.6 : 2.2);
   p.noFill();
   const stems = fringe ? 7 : pressed ? 5 : 6;
   for (let i = 0; i < stems; i += 1) {
@@ -810,8 +807,8 @@ function drawBotanicalAnchor(p, metaphor, scale, emphasis, primary, secondary, a
       y -= (pressed ? 8 : 11) * scale;
     }
     p.endShape();
-    p.stroke(...(i % 2 ? accent : secondary), 150 * emphasis);
-    p.strokeWeight(pressed ? 1 : 1.4);
+    p.stroke(...(i % 2 ? accent : secondary), 190 * emphasis);
+    p.strokeWeight(pressed ? 1.3 : 1.7);
     const leaflets = pressed ? 4 : 6;
     for (let L = 1; L <= leaflets; L += 1) {
       const t = L / (leaflets + 1);
@@ -828,6 +825,20 @@ function drawBotanicalAnchor(p, metaphor, scale, emphasis, primary, secondary, a
       );
       p.endShape();
       if (!pressed) {
+        p.fill(...(L % 2 ? accent : secondary), 70 * emphasis);
+        p.noStroke();
+        p.beginShape();
+        p.vertex(lx, ly);
+        p.quadraticVertex(
+          lx + dir * 18 * scale,
+          ly - 10 * scale,
+          lx + dir * 6 * scale,
+          ly - 22 * scale
+        );
+        p.vertex(lx, ly - 4 * scale);
+        p.endShape(p.CLOSE);
+        p.noFill();
+        p.stroke(...(i % 2 ? accent : secondary), 190 * emphasis);
         p.line(lx, ly, lx + dir * 14 * scale, ly - 8 * scale);
       }
     }
