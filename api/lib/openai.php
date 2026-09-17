@@ -114,10 +114,25 @@ function cinematicImagePrompt(array $dna): string
     $emotion = (string) ($semantic['emotionalCore'] ?? 'unease');
     $narrative = str_replace('-', ' ', (string) ($semantic['narrativeCore'] ?? 'discovery'));
     $spatial = (string) ($semantic['spatial'] ?? 'isolated');
+    $human = (string) ($semantic['humanElements'] ?? 'none');
+    $rawMetaphor = (string) ($semantic['visualMetaphor'] ?? '');
+
+    $natureClause = in_array($rawMetaphor, [
+        'canine-silhouette',
+        'animal-tracks',
+        'mountain-ridge',
+        'alpine-peak',
+        'wild-canopy',
+        'botanical-press',
+        'forest-fringe',
+    ], true) || in_array($human, ['animal-silhouette', 'flora'], true)
+        ? 'Wildlife, canines, mountains, alpine terrain, forests, and botanical environments ARE allowed when this story selects them. Photograph the natural subject as a cinematic still, never a posed human studio or fashion portrait.'
+        : 'Do not transform this into a generic human studio-fashion portrait.';
 
     return <<<PROMPT
 Cinematic still photograph for a movie, not a poster.
-No typography, no titles, no captions, no logos, no credits, no UI.
+No typography, no titles, no captions, no logos, no credits, no UI, no HUD, no lettering, no metadata labels.
+Do not render REF:// labels, reference identifiers, or archive codes.
 {$camera} shot of {$subject} in {$environment}.
 Visual metaphor: {$metaphor}. Material presence of {$material} with {$texture} surface.
 Emotional core: {$emotion}. Narrative about {$narrative}. Spatial feel: {$spatial}.
@@ -126,6 +141,7 @@ Lighting: {$lighting}. Atmosphere: {$atmosphere}.
 Colour grade keyed to {$bg}, {$primary}, and a spare accent of {$accent}.
 One dominant subject, restrained detail, physically believable materials, filmic grain.
 The plate must remain textless: no typography, no titles, no captions, no logos, no credits, no UI.
+{$natureClause}
 Avoid generic neon glow, circuit boards, holographic HUDs, and decorative symmetry unless the story is technological.
 PROMPT;
 }

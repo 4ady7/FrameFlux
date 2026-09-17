@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/api/lib/dna.php';
+require_once dirname(__DIR__) . '/api/lib/openai.php';
 
 $failed = 0;
 
@@ -456,7 +457,7 @@ expect(
     in_array($cape['semantic']['visualMetaphor'], ['coastal-compass', 'handwritten-letter', 'weathered-door', 'silhouette-threshold'], true),
     'Cape Solitude uses a coastal memory metaphor'
 );
-expect(in_array($cape['semantic']['lineSemantics'], ['waves', 'coastline', 'handwriting', 'horizon'], true), 'romance lines are organic');
+expect(in_array($cape['semantic']['lineSemantics'], ['waves', 'coastline', 'handwriting', 'horizon', 'tendrils'], true), 'romance lines are organic');
 expect(
     in_array($cape['cinematic']['lighting'], ['coastal-haze', 'golden-hour', 'bloom', 'backlit'], true),
     'romance lighting is coastal/haze'
@@ -488,7 +489,7 @@ expect(
     in_array($letters['cinematic']['lighting'], ['domestic-warm', 'window-light', 'practical'], true),
     'contemporary lighting is domestic'
 );
-expect(in_array($letters['semantic']['humanElements'], ['letter', 'tickets', 'cups', 'hands', 'paired-objects'], true), 'contemporary keeps human traces');
+expect(in_array($letters['semantic']['humanElements'], ['letter', 'tickets', 'cups', 'hands', 'paired-objects', 'flora', 'animal-silhouette'], true), 'contemporary keeps human traces');
 expect($letters['composition']['layout'] !== 'frame-inset', 'contemporary avoids the sterile inset void');
 
 expect(
@@ -506,7 +507,7 @@ $scifi = normalizeParams(fallbackVisualParams('Orbital Quiet', 'science fiction'
 expect($scifi['semantic']['grammarFamily'] === 'scifi', 'sci-fi keeps the tech family');
 expect(isTechFamily($scifi['semantic']['grammarFamily']), 'sci-fi is a tech family');
 expect(
-    in_array($scifi['procedural']['primaryPattern'], ['grid', 'mesh', 'rings', 'particles', 'flow'], true),
+    in_array($scifi['procedural']['primaryPattern'], ['grid', 'mesh', 'rings', 'particles', 'flow', 'hatching', 'halftone'], true),
     'sci-fi may still use geometric language'
 );
 
@@ -555,7 +556,7 @@ expect(hexLuminance($hostileCyber['palette']['background']) > 0.38, 'comedy reje
 
 $adv = normalizeParams(fallbackVisualParams('The Ochre Map', 'adventure', 'An expedition across ruined stone and oxidised brass.', 12, 'generate', null), 'The Ochre Map', 'adventure', 'An expedition across ruined stone and oxidised brass.');
 expect($adv['semantic']['grammarFamily'] === 'adventure', 'adventure grammar from genre');
-expect(in_array($adv['semantic']['material'], ['leather', 'brass', 'stone', 'paper', 'wood', 'metal'], true), 'adventure uses rugged materials');
+expect(in_array($adv['semantic']['material'], ['leather', 'brass', 'stone', 'paper', 'wood', 'metal', 'granite', 'slate'], true), 'adventure uses rugged materials');
 expect(in_array($adv['cinematic']['lighting'], ['chiaroscuro', 'hard-sun', 'shaft', 'harsh'], true), 'adventure uses dramatic light');
 
 expect(in_array($rent['composition']['mode'], COMPOSITION_MODES, true), 'comedy has a composition mode');
@@ -768,5 +769,405 @@ expect(isset($wh['semantic']['visualMetaphor']), 'whitelist exposes nested seman
 expect(isset($wh['typography']['title']['letterforms']), 'whitelist exposes nested title typography');
 expect(($wh['typography']['genreVisibility'] ?? '') === 'hidden', 'whitelist keeps genre hidden');
 
+// --- Organic patterns, nature semantics, genre-family matrix ---
+
+$newPatterns = ['halftone', 'hatching', 'creases', 'marbling', 'sunburst'];
+foreach ($newPatterns as $pat) {
+    expect(in_array($pat, FRAMEFLUX_PATTERNS, true), "pattern {$pat} is declared");
+    expect((FRAMEFLUX_PATTERN_ALIASES[$pat] ?? '') === $pat, "pattern {$pat} has an identity alias");
+    expect(!in_array($pat, FRAMEFLUX_TECH_PATTERNS, true), "pattern {$pat} is not classified as tech");
+}
+
+$comedyHalftone = normalizeParams([
+    'semantic' => [
+        'grammarFamily' => 'comedy',
+        'emotionalCore' => 'playfulness',
+        'narrativeCore' => 'identity',
+        'visualMetaphor' => 'chaotic-key',
+        'narrativeAnchor' => 'chaotic-key',
+        'material' => 'paper',
+        'texture' => 'glossy',
+        'spatial' => 'fragmented',
+        'particleSemantics' => 'confetti',
+        'lineSemantics' => 'cords',
+        'humanElements' => 'paired-objects',
+        'groundTone' => 'light',
+        'artFamily' => 'radial',
+    ],
+    'procedural' => ['primaryPattern' => 'halftone', 'secondaryPattern' => 'sunburst', 'density' => 0.5],
+    'palette' => [
+        'background' => '#F4EFE4',
+        'primary' => '#E11D74',
+        'secondary' => '#2BB3B1',
+        'accent' => '#E11D74',
+        'text' => '#1A1410',
+        'highlight' => '#C6FF3D',
+    ],
+    'cinematic' => [
+        'subject' => 'A chaotic brass key ring on a sunlit table, paper dust in the air',
+        'environment' => 'A sunlit interior with unused floor around the object',
+        'lighting' => 'high-key',
+        'atmosphere' => 'paper dust',
+        'camera' => 'wide',
+    ],
+    'typography' => [
+        'genreVisibility' => 'hidden',
+        'title' => ['weight' => 'black', 'case' => 'mixed', 'letterforms' => 'extended', 'structure' => 'layered', 'placement' => 'upper-third'],
+        'quote' => ['style' => 'typewriter', 'legibility' => 'plate', 'placement' => 'below-title'],
+    ],
+], 'Rent-A-Mansion', 'Workplace Comedy', 'A farce about keys.');
+expect($comedyHalftone['procedural']['primaryPattern'] === 'halftone', 'requested halftone survives comedy normalization');
+expect($comedyHalftone['procedural']['secondaryPattern'] === 'sunburst', 'requested sunburst survives comedy normalization');
+expect(!in_array('primaryPattern coerced', $comedyHalftone['warnings'], true), 'halftone is not coerced away');
+
+foreach (['hatching', 'creases', 'marbling', 'sunburst'] as $pat) {
+    $keep = normalizeParams(['pattern' => $pat, 'secondaryPattern' => 'flow'], 'The Ochre Map', 'adventure', 'An expedition across granite.');
+    expect($keep['procedural']['primaryPattern'] === $pat, "requested {$pat} is not silently replaced by flow");
+}
+
+$newMetaphors = ['canine-silhouette', 'animal-tracks', 'mountain-ridge', 'alpine-peak', 'wild-canopy', 'botanical-press', 'forest-fringe'];
+foreach ($newMetaphors as $m) {
+    expect(in_array($m, FRAMEFLUX_METAPHORS, true), "metaphor {$m} is in production vocabulary");
+    $kept = normalizeParams([
+        'visualMetaphor' => $m,
+        'narrativeAnchor' => $m,
+        'pattern' => 'flow',
+        'secondaryPattern' => 'particles',
+    ], 'Nature Still', 'Drama', 'A landscape holds its shape.');
+    expect($kept['semantic']['visualMetaphor'] === $m, "metaphor {$m} survives normalization");
+    expect($kept['semantic']['narrativeAnchor'] === $m, "anchor {$m} stays aligned");
+}
+
+$newMaterials = ['fur', 'bone', 'bark', 'pressed-leaves', 'granite', 'slate'];
+foreach ($newMaterials as $mat) {
+    expect(in_array($mat, FRAMEFLUX_MATERIALS, true), "material {$mat} is in production vocabulary");
+    $kept = normalizeParams(['material' => $mat, 'visualMetaphor' => 'wild-canopy'], 'Nature Still', 'Drama', 'A landscape holds its shape.');
+    expect($kept['semantic']['material'] === $mat, "material {$mat} survives normalization");
+}
+
+foreach (['tendrils', 'fault-lines', 'paw-prints'] as $line) {
+    expect(in_array($line, FRAMEFLUX_LINE_SEMANTICS, true), "line {$line} is valid");
+    $kept = normalizeParams(['lineSemantics' => $line, 'visualMetaphor' => 'wild-canopy'], 'Nature Still', 'Drama', 'A landscape holds its shape.');
+    expect($kept['semantic']['lineSemantics'] === $line, "line {$line} survives normalization");
+}
+
+foreach (['animal-silhouette', 'flora'] as $human) {
+    expect(in_array($human, FRAMEFLUX_HUMAN_ELEMENTS, true), "human element {$human} is valid");
+    $kept = normalizeParams(['humanElements' => $human, 'visualMetaphor' => 'wild-canopy'], 'Nature Still', 'Drama', 'A landscape holds its shape.');
+    expect($kept['semantic']['humanElements'] === $human, "human element {$human} survives normalization");
+}
+
+$wild = normalizeParams(['visualMetaphor' => 'wild-canopy', 'material' => 'granite', 'pattern' => 'marbling'], 'Canopy', 'Fantasy', 'A forest kingdom wakes.');
+expect($wild['semantic']['visualMetaphor'] === 'wild-canopy', 'wild-canopy is not replaced by an unrelated metaphor');
+expect($wild['semantic']['material'] === 'granite', 'granite is not discarded as unsupported');
+expect($wild['procedural']['primaryPattern'] === 'marbling', 'marbling survives a fantasy nature story');
+
+$genreMatrix = [
+    'comedy' => [
+        'title' => 'Punchline Weather',
+        'genre' => 'comedy',
+        'pitch' => 'A failed magician invents a weather machine for one joke.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('comedy');
+            return $d['semantic']['groundTone'] === 'light'
+                && hexLuminance($d['palette']['background']) > 0.45
+                && !in_array($d['procedural']['primaryPattern'], FRAMEFLUX_TECH_PATTERNS, true)
+                && in_array('halftone', $g['patterns'], true)
+                && in_array('sunburst', $g['patterns'], true)
+                && in_array($d['procedural']['primaryPattern'], $g['patterns'], true);
+        },
+    ],
+    'romance' => [
+        'title' => 'Letters Softly',
+        'genre' => 'romantic drama',
+        'pitch' => 'Two lovers exchange letters across a wartime border.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('romance');
+            return in_array($d['semantic']['emotionalCore'], ['intimacy', 'longing'], true)
+                && in_array('tendrils', $g['lineSemantics'], true)
+                && in_array($d['semantic']['lineSemantics'], $g['lineSemantics'], true)
+                && in_array('marbling', $g['patterns'], true);
+        },
+    ],
+    'adventure' => [
+        'title' => 'The Ochre Map',
+        'genre' => 'adventure',
+        'pitch' => 'An expedition across ruined stone, granite, and oxidised brass.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('adventure');
+            return in_array($d['semantic']['material'], ['leather', 'brass', 'stone', 'paper', 'wood', 'metal', 'granite', 'slate'], true)
+                && (in_array('mountain-ridge', $g['metaphors'], true) || in_array('map-fold', $g['metaphors'], true))
+                && in_array('hatching', $g['patterns'], true);
+        },
+    ],
+    'contemporary' => [
+        'title' => 'Letters Between Stations',
+        'genre' => 'Contemporary Romance',
+        'pitch' => 'Two commuters keep a correspondence across overlapping train lines.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('contemporary');
+            return in_array($d['semantic']['material'], ['cardstock', 'paper', 'linen', 'pressed-leaves'], true)
+                && in_array($d['cinematic']['lighting'], ['domestic-warm', 'window-light', 'practical'], true)
+                && in_array('linen', $g['materials'], true);
+        },
+    ],
+    'drama' => [
+        'title' => 'Quiet Rooms',
+        'genre' => 'Drama',
+        'pitch' => 'A family waits through an overcast afternoon in a paper-walled house.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('drama');
+            return $d['semantic']['grammarFamily'] === 'drama'
+                && in_array('creases', $g['patterns'], true)
+                && in_array('marbling', $g['patterns'], true)
+                && !in_array('grid', $g['patterns'], true)
+                && in_array($d['procedural']['primaryPattern'], $g['patterns'], true);
+        },
+    ],
+    'thriller' => [
+        'title' => 'Vault Hour',
+        'genre' => 'heist thriller',
+        'pitch' => 'A crew cracks a timed vault under the city at midnight.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('thriller');
+            return $d['semantic']['groundTone'] === 'dark'
+                && $d['contrast'] >= 0.7
+                && in_array($d['semantic']['emotionalCore'], ['urgency', 'paranoia', 'unease', 'dread'], true)
+                && in_array('grid', $g['patterns'], true)
+                && in_array('hatching', $g['patterns'], true);
+        },
+    ],
+    'scifi' => [
+        'title' => 'Orbital Quiet',
+        'genre' => 'science fiction',
+        'pitch' => 'A signal from a dead satellite rewrites memory.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('scifi');
+            return $d['semantic']['groundTone'] === 'dark'
+                && in_array('grid', $g['patterns'], true)
+                && in_array('mesh', $g['patterns'], true)
+                && in_array('rings', $g['patterns'], true)
+                && in_array($d['procedural']['primaryPattern'], $g['patterns'], true);
+        },
+    ],
+    'horror' => [
+        'title' => 'House of Mirrors',
+        'genre' => 'psychological horror',
+        'pitch' => 'A detective becomes obsessed with reflections that may not exist.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('horror');
+            return $d['semantic']['groundTone'] === 'dark'
+                && in_array($d['semantic']['emotionalCore'], ['dread', 'isolation', 'unease', 'paranoia'], true)
+                && in_array('hatching', $g['patterns'], true)
+                && in_array('halftone', $g['patterns'], true);
+        },
+    ],
+    'fantasy' => [
+        'title' => 'Root Crown',
+        'genre' => 'fantasy',
+        'pitch' => 'A forest kingdom wakes when the eclipse arrives and wonder returns to the canopy.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('fantasy');
+            return in_array($d['semantic']['visualMetaphor'], ['compass-rose', 'wild-canopy', 'eclipse', 'tangled-roots', 'alpine-peak', 'forest-fringe', 'weathered-door', 'locked-mechanism'], true)
+                && in_array($d['semantic']['emotionalCore'], ['wonder', 'hope', 'unease', 'isolation'], true)
+                && in_array('wild-canopy', $g['metaphors'], true)
+                && in_array('hatching', $g['patterns'], true);
+        },
+    ],
+    'mystery' => [
+        'title' => 'Missing Floor',
+        'genre' => 'mystery',
+        'pitch' => 'An architect maps a building that should not exist and files every clue on paper.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('mystery');
+            return $d['semantic']['narrativeCore'] === 'investigation'
+                && in_array($d['semantic']['material'], ['paper', 'wood', 'leather', 'cardstock', 'pressed-leaves'], true)
+                && in_array('creases', $g['patterns'], true);
+        },
+    ],
+    'historical' => [
+        'title' => 'Iron Tide',
+        'genre' => 'historical drama',
+        'pitch' => 'A coastal town survives occupation under rusted docks, keeping paper ledgers of the lost.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('historical');
+            return in_array($d['semantic']['material'], ['paper', 'leather', 'wood', 'linen', 'granite', 'slate'], true)
+                && in_array($d['semantic']['emotionalCore'], ['nostalgia', 'grief', 'isolation', 'hope'], true)
+                && in_array('hatching', $g['patterns'], true);
+        },
+    ],
+    'coming-of-age' => [
+        'title' => 'First Summer',
+        'genre' => 'coming-of-age',
+        'pitch' => 'A teenager finds family roots tangled under an old house in drifting afternoon light.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('coming-of-age');
+            return $d['semantic']['groundTone'] === 'light'
+                && in_array($d['semantic']['spatial'], ['isolated', 'expansive', 'drifting'], true)
+                && hexLuminance($d['palette']['background']) > 0.4;
+        },
+    ],
+    'documentary' => [
+        'title' => 'Dust Ledger',
+        'genre' => 'documentary',
+        'pitch' => 'An archivist reconstructs a vanished neighbourhood from ash and photographic paper.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('documentary');
+            return in_array($d['composition']['mode'], COMPOSITION_MODES, true)
+                && in_array('editorial', $g['compositionGrammars'], true)
+                && in_array($d['semantic']['texture'], ['grainy', 'fibrous', 'photographic'], true)
+                && in_array('hatching', $g['patterns'], true);
+        },
+    ],
+    'musical' => [
+        'title' => 'Gilt Hour',
+        'genre' => 'musical',
+        'pitch' => 'A nightclub orchestra plays until the chandeliers shake and ribbons of light fill the room.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('musical');
+            return in_array($d['cinematic']['lighting'], ['theatrical', 'high-key', 'bloom'], true)
+                && in_array($d['semantic']['lineSemantics'], ['ribbons', 'cords', 'horizon'], true)
+                && in_array('sunburst', $g['patterns'], true);
+        },
+    ],
+    'animation' => [
+        'title' => 'Paper Comet',
+        'genre' => 'animation',
+        'pitch' => 'A foil bird races confetti weather across a crowded painted sky.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('animation');
+            return in_array($d['semantic']['material'], ['paper', 'foil', 'cardstock', 'fur'], true)
+                && $d['semantic']['narrativeEnergy'] >= 0.7
+                && in_array('halftone', $g['patterns'], true);
+        },
+    ],
+    'family' => [
+        'title' => 'Kitchen Light',
+        'genre' => 'family',
+        'pitch' => 'Two matching cups wait on a table while a household keeps its quiet evening.',
+        'check' => static function (array $d): bool {
+            $g = genreGrammar('family');
+            return in_array($d['cinematic']['lighting'], ['window-light', 'golden-hour', 'domestic-warm'], true)
+                && in_array($d['semantic']['humanElements'], ['hands', 'paired-objects', 'silhouette', 'animal-silhouette', 'flora'], true)
+                && $d['semantic']['groundTone'] === 'light';
+        },
+    ],
+];
+
+foreach (GENRE_FAMILIES as $familyName) {
+    expect(isset($genreMatrix[$familyName]), "genre-family test exists for {$familyName}");
+    $row = $genreMatrix[$familyName];
+    $dna = normalizeParams(
+        fallbackVisualParams($row['title'], $row['genre'], $row['pitch'], 21, 'generate', null),
+        $row['title'],
+        $row['genre'],
+        $row['pitch']
+    );
+    expect($dna['semantic']['grammarFamily'] === $familyName, "{$familyName} fixture resolves to {$familyName}");
+    expect($row['check']($dna), "{$familyName} has a meaningful family assertion");
+}
+
+foreach (GENRE_FAMILIES as $familyName) {
+    $g = genreGrammar($familyName);
+    $presets = $g['palettePresets'] ?? [];
+    expect(count($presets) >= 6, "{$familyName} has at least six palette presets");
+    $bgs = [];
+    foreach ($presets as $preset) {
+        $bgs[$preset['bg']] = true;
+    }
+    expect(count($bgs) >= 4, "{$familyName} palettes are not identical");
+}
+
+$dusk = normalizeParams([
+    'semantic' => [
+        'grammarFamily' => 'romance',
+        'groundTone' => 'light',
+        'emotionalCore' => 'longing',
+        'narrativeCore' => 'memory',
+        'visualMetaphor' => 'coastal-compass',
+        'narrativeAnchor' => 'coastal-compass',
+        'material' => 'linen',
+        'texture' => 'weathered',
+        'spatial' => 'drifting',
+        'particleSemantics' => 'salt',
+        'lineSemantics' => 'waves',
+        'humanElements' => 'letter',
+        'artFamily' => 'organic',
+    ],
+    'palette' => [
+        'background' => '#1A2430',
+        'primary' => '#C97B84',
+        'secondary' => '#4A6A7A',
+        'accent' => '#E8D4C4',
+        'text' => '#F3E6D4',
+        'highlight' => '#E8B878',
+    ],
+], 'Dusk at the Harbour', 'Romantic Drama', 'They wait at dusk as a storm gathers over the harbour.');
+expect($dusk['palette']['background'] === '#1a2430', 'story-supported dusk palette is not overwritten');
+expect(!in_array('palette coerced to genre ground', $dusk['warnings'], true), 'atmospheric romance palette is not coerced');
+
+$dogPitch = 'A retired rescue dog accompanies a child through the countryside while searching for the place where the dog once lived.';
+$dog = normalizeParams(fallbackVisualParams('The Last Kennel', 'Family Drama', $dogPitch, 12, 'generate', null), 'The Last Kennel', 'Family Drama', $dogPitch);
+expect(in_array($dog['semantic']['visualMetaphor'], ['canine-silhouette', 'animal-tracks'], true), 'dog fixture selects a canine metaphor');
+expect(in_array($dog['semantic']['material'], ['fur', 'bone', 'paper', 'linen', 'wood', 'cardstock', 'pressed-leaves'], true), 'dog fixture keeps animal-compatible materials');
+expect(in_array($dog['semantic']['lineSemantics'], ['paw-prints', 'horizon', 'threads', 'waves', 'tendrils'], true), 'dog fixture allows paw-print language');
+expect(in_array($dog['semantic']['humanElements'], ['animal-silhouette', 'hands', 'paired-objects', 'silhouette', 'flora'], true), 'dog fixture can use animal-silhouette');
+$dogWarn = array_filter($dog['warnings'], static fn($w) => str_contains((string) $w, 'unsupported') || str_contains((string) $w, 'rejected'));
+expect($dogWarn === [], 'dog fixture has no unsupported-value warnings');
+
+$mountainPitch = 'A climber reaches a remote mountain summit and discovers an old marker left by an expedition decades earlier.';
+$mountain = normalizeParams(fallbackVisualParams('Summit Marker', 'adventure', $mountainPitch, 12, 'generate', null), 'Summit Marker', 'adventure', $mountainPitch);
+expect(in_array($mountain['semantic']['visualMetaphor'], ['mountain-ridge', 'alpine-peak', 'forest-fringe', 'map-fold', 'compass-rose'], true), 'mountain fixture selects terrain metaphor');
+expect(in_array($mountain['semantic']['material'], ['granite', 'slate', 'leather', 'brass', 'stone', 'paper', 'wood', 'metal'], true), 'mountain fixture keeps rugged materials');
+expect(in_array($mountain['semantic']['lineSemantics'], ['fault-lines', 'contour', 'trails', 'threads', 'horizon'], true), 'mountain fixture can use fault-lines');
+$mtWarn = array_filter($mountain['warnings'], static fn($w) => str_contains((string) $w, 'unsupported') || str_contains((string) $w, 'rejected'));
+expect($mtWarn === [], 'mountain fixture has no unsupported-value warnings');
+
+$botanyPitch = 'A botanist restores a neglected botanical garden and discovers a collection of pressed plants documenting a forgotten family history.';
+$botany = normalizeParams(fallbackVisualParams('Pressed Garden', 'Drama', $botanyPitch, 12, 'generate', null), 'Pressed Garden', 'Drama', $botanyPitch);
+expect(in_array($botany['semantic']['visualMetaphor'], ['botanical-press', 'wild-canopy', 'forest-fringe'], true), 'botanical fixture selects a plant metaphor');
+expect(in_array($botany['semantic']['material'], ['pressed-leaves', 'bark', 'paper', 'wood', 'linen', 'cardstock', 'bone'], true), 'botanical fixture keeps plant materials');
+expect(in_array($botany['semantic']['lineSemantics'], ['tendrils', 'horizon', 'threads', 'handwriting'], true), 'botanical fixture can use tendrils');
+expect(in_array($botany['semantic']['humanElements'], ['flora', 'silhouette', 'hands', 'paired-objects', 'animal-silhouette'], true), 'botanical fixture can use flora');
+$botWarn = array_filter($botany['warnings'], static fn($w) => str_contains((string) $w, 'unsupported') || str_contains((string) $w, 'rejected'));
+expect($botWarn === [], 'botanical fixture has no unsupported-value warnings');
+
+$dogA = inferSemanticProfile('The Last Kennel', 'Family Drama', $dogPitch, 12);
+$dogB = inferSemanticProfile('The Last Kennel', 'Family Drama', $dogPitch, 12);
+expect($dogA === $dogB, 'canine inference is deterministic for a fixed seed');
+
+$posterJs = file_get_contents(dirname(__DIR__) . '/js/poster.js');
+$systemsJs = file_get_contents(dirname(__DIR__) . '/js/systems.js');
+expect(is_string($posterJs) && $posterJs !== '', 'poster renderer source is readable');
+expect(str_contains($posterJs, 'halftone: drawHalftone'), 'drawPattern dispatch lists halftone');
+expect(str_contains($posterJs, 'hatching: drawHatching'), 'drawPattern dispatch lists hatching');
+expect(str_contains($posterJs, 'creases: drawCreases'), 'drawPattern dispatch lists creases');
+expect(str_contains($posterJs, 'marbling: drawMarbling'), 'drawPattern dispatch lists marbling');
+expect(str_contains($posterJs, 'sunburst: drawSunburst'), 'drawPattern dispatch lists sunburst');
+expect(str_contains($posterJs, 'const PATTERN_RENDERERS'), 'procedural dispatch uses PATTERN_RENDERERS');
+expect(str_contains($posterJs, 'quoteSafe'), 'protectionWeight can see quoteSafe');
+expect(str_contains($systemsJs, 'shouldDrawRefLabel'), 'REF:// drawing is gated behind shouldDrawRefLabel');
+expect(str_contains($systemsJs, 'dna.debug && dna.debug.refLabel'), 'REF:// remains a debug-only pathway');
+expect(!preg_match('/function drawRefLabel\([^)]*\) \{\s*if \(!plan\.ref\)/', $systemsJs), 'production drawRefLabel is no longer unguarded');
+
+$prompt = cinematicImagePrompt($dog);
+expect(str_contains(strtolower($prompt), 'do not render ref://'), 'image prompt forbids visible REF:// metadata');
+expect(!preg_match('/\brender REF:\/\//i', str_replace('Do not render REF://', '', $prompt)), 'image prompt does not request REF:// labels');
+expect(!plateLooksLikePosterCopy($prompt) || str_contains($prompt, 'Do not render REF://'), 'cinematic prompt treats REF:// as a prohibition');
+expect(!str_contains(strtolower($dog['cinematic']['subject']), 'ref://'), 'cinematic subject does not include REF://');
+expect(str_contains(strtolower($dog['cinematic']['subject']), 'dog') || str_contains(strtolower($dog['cinematic']['environment']), 'countryside'), 'canine plate may show the animal subject');
+expect(!str_contains(strtolower($prompt), 'studio fashion portrait') || str_contains(strtolower($prompt), 'never a posed human studio'), 'nature prompt blocks studio-portrait drift');
+
+$rules = dnaRulesPrompt();
+expect(str_contains($rules, 'halftone'), 'DNA rules mention halftone');
+expect(str_contains($rules, 'canine-silhouette'), 'DNA rules mention canine-silhouette');
+expect(str_contains($rules, 'REF://'), 'DNA rules forbid REF://');
+
+$shape = dnaShapePrompt();
+foreach ($newPatterns as $pat) {
+    expect(str_contains($shape, $pat), "DNA shape lists {$pat}");
+}
+
 echo $failed === 0 ? "\nAll DNA tests passed.\n" : "\n{$failed} test(s) failed.\n";
 exit($failed === 0 ? 0 : 1);
+
