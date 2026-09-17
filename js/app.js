@@ -139,6 +139,9 @@ async function requestDna({ mode = "generate", previous = null } = {}) {
     body: JSON.stringify(payload),
   });
   const data = await response.json().catch(() => ({}));
+  // #region agent log
+  fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'E',location:'js/app.js:requestDna',message:'generate response',data:{status:response.status,ok:response.ok,source:data.source||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!response.ok) {
     throw new Error(data.error || "Could not create Visual DNA.");
   }
@@ -152,6 +155,9 @@ async function requestImage(dna) {
     body: JSON.stringify({ dna }),
   });
   const data = await response.json().catch(() => ({}));
+  // #region agent log
+  fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'E',location:'js/app.js:requestImage',message:'image response',data:{status:response.status,ok:response.ok,source:data.source||null,hasImage:!!data.image,note:data.note||null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!response.ok) {
     return null;
   }

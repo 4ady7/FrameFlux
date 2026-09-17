@@ -8,5 +8,5 @@
 return [
     'openai_api_key' => '',
     'openai_model' => 'gpt-4o-mini',
-    'openai_image_model' => 'dall-e-3',
+    'openai_image_model' => 'gpt-image-2',
 ];

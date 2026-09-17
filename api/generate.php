@@ -72,6 +72,10 @@ if (($mode === 'improve' || $mode === 'reimagine') && $previous === null) {
 $config = framefluxConfig();
 $apiKey = framefluxApiKey($config);
 $model = framefluxChatModel($config);
+// #region agent log
+$log = json_encode(['sessionId' => '78eac4', 'hypothesisId' => 'A', 'location' => 'api/generate.php:72', 'message' => 'generate api key check', 'data' => ['hasKey' => $apiKey !== '', 'model' => $model, 'title' => $title], 'timestamp' => (int) (microtime(true) * 1000)]) . "\n";
+file_put_contents('/Users/shady/Projects/FrameFlux/.cursor/debug-78eac4.log', $log, FILE_APPEND);
+// #endregion
 
 $params = null;
 $source = 'fallback';
@@ -91,6 +95,15 @@ $dna = normalizeParams($params, $title, $genre, $pitch);
 $dna['source'] = $source;
 $dna['mode'] = $mode;
 $dna['qualityNotes'] = assessDnaQuality($dna);
+
+// Server terminal notification
+$timestamp = date('H:i:s');
+if ($source === 'ai') {
+    error_log("[{$timestamp}] ✅ Visual DNA: AI SUCCESS (Model: {$model}) | Film: '{$title}'");
+} else {
+    $reason = ($apiKey === '') ? 'Missing or unread API key' : 'requestVisualDna() failed or returned non-200';
+    error_log("[{$timestamp}] ⚠️ Visual DNA: LOCAL FALLBACK USED ({$reason}) | Film: '{$title}'");
+}
 
 echo json_encode($dna);
 
@@ -176,3 +189,4 @@ PROMPT;
 
     return openaiChatJson($apiKey, $model, $system, $prompt, $temperature);
 }
+
