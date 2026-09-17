@@ -4,11 +4,13 @@ const improveBtn = document.querySelector("#improve");
 const regenerateBtn = document.querySelector("#regenerate");
 const reimagineBtn = document.querySelector("#reimagine");
 const downloadBtn = document.querySelector("#download");
+const gptImageBtn = document.querySelector("#gpt-image");
 const statusEl = document.querySelector("#status");
 const errorEl = document.querySelector("#error");
 const meta = document.querySelector("#meta");
 const variationsEl = document.querySelector("#variations");
 const posterFrame = document.querySelector("#poster-frame");
+const posterSpinner = document.querySelector("#poster-spinner");
 
 const ROLES = ["signature", "hybrid", "alternative"];
 const SEED_SHIFTS = { signature: 0, hybrid: 101, alternative: 211 };
@@ -24,6 +26,26 @@ let visualDna = null;
 let keyArt = null;
 let baseSeed = Date.now() % 100000;
 let selectedRole = "signature";
+const GPT_IMAGE_KEY = "frameflux-gpt-image";
+
+function useGptImage() {
+  return gptImageBtn.getAttribute("aria-pressed") === "true";
+}
+
+function syncGptImageButton() {
+  const on = useGptImage();
+  gptImageBtn.textContent = on ? "GPT Image on" : "GPT Image off";
+}
+
+try {
+  const stored = localStorage.getItem(GPT_IMAGE_KEY);
+  if (stored === "off") {
+    gptImageBtn.setAttribute("aria-pressed", "false");
+  }
+} catch (err) {
+  /* ignore quota / private mode */
+}
+syncGptImageButton();
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -83,13 +105,13 @@ function enablePosterActions(enabled) {
   downloadBtn.disabled = !enabled;
 }
 
-function busy(isBusy) {
-  generateBtn.disabled = isBusy;
-  if (isBusy) {
-    enablePosterActions(false);
-  } else if (visualDna) {
-    enablePosterActions(true);
-  }
+function setPosterBusy(isBusy) {
+  posterSpinner.hidden = !isBusy;
+  posterFrame.classList.toggle("is-busy", isBusy);
+  posterSpinner.setAttribute("aria-busy", isBusy ? "true" : "false");
+  // #region agent log
+  fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'S',location:'js/app.js:setPosterBusy',message:'poster spinner',data:{isBusy,hidden:posterSpinner.hidden},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
 }
 
 function seedFor(role) {
@@ -149,10 +171,16 @@ async function requestDna({ mode = "generate", previous = null } = {}) {
 }
 
 async function requestImage(dna) {
+  if (!useGptImage()) {
+    // #region agent log
+    fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'E',location:'js/app.js:requestImage',message:'image skipped',data:{useGptImage:false},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return null;
+  }
   const response = await fetch("api/image.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dna }),
+    body: JSON.stringify({ dna, useImage: true }),
   });
   const data = await response.json().catch(() => ({}));
   // #region agent log
@@ -169,20 +197,37 @@ async function requestImage(dna) {
 
 async function compose({ mode, previous, interpreting }) {
   setError("");
-  setStatus(interpreting);
-  visualDna = await requestDna({ mode, previous });
-  setStatus("Creating Visual DNA…");
-  setStatus("Generating cinematic key art…");
-  keyArt = await requestImage(visualDna);
-  setStatus("Building FrameFlux variations…");
-  baseSeed = Math.floor(Math.random() * 1_000_000);
-  selectedRole = "signature";
-  renderAll();
-  showMeta(visualDna);
-  const quote = visualDna.concept?.quote || visualDna.quote || "";
-  const mood = visualDna.concept?.mood || visualDna.mood || "";
-  const verb = mode === "improve" ? "Improved" : mode === "reimagine" ? "Reimagined" : "New design";
-  setStatus(`${verb}${mood ? ` · ${mood}` : ""}${quote ? ` · “${quote}”` : ""}`);
+  setPosterBusy(true);
+  try {
+    setStatus(interpreting);
+    visualDna = await requestDna({ mode, previous });
+    setStatus("Creating Visual DNA…");
+    if (useGptImage()) {
+      setStatus("Generating cinematic key art…");
+    }
+    keyArt = await requestImage(visualDna);
+    setStatus("Building FrameFlux variations…");
+    baseSeed = Math.floor(Math.random() * 1_000_000);
+    selectedRole = "signature";
+    renderAll();
+    showMeta(visualDna);
+    const quote = visualDna.concept?.quote || visualDna.quote || "";
+    const mood = visualDna.concept?.mood || visualDna.mood || "";
+    const verb = mode === "improve" ? "Improved" : mode === "reimagine" ? "Reimagined" : "New design";
+    setStatus(`${verb}${mood ? ` · ${mood}` : ""}${quote ? ` · “${quote}”` : ""}`);
+  } finally {
+    setPosterBusy(false);
+  }
+}
+
+function busy(isBusy) {
+  generateBtn.disabled = isBusy;
+  if (isBusy) {
+    enablePosterActions(false);
+    setPosterBusy(true);
+  } else if (visualDna) {
+    enablePosterActions(true);
+  }
 }
 
 form.addEventListener("submit", async (event) => {
@@ -243,7 +288,7 @@ regenerateBtn.addEventListener("click", () => {
   }
   baseSeed = Math.floor(Math.random() * 1_000_000);
   renderAll();
-  setStatus("Same Visual DNA and cinematic still. New procedural execution.");
+  setStatus("Same Visual DNA" + (keyArt ? " and cinematic still" : "") + ". New procedural execution.");
 });
 
 downloadBtn.addEventListener("click", () => {
@@ -252,6 +297,17 @@ downloadBtn.addEventListener("click", () => {
   }
   const title = visualDna.concept?.title || visualDna.title || "poster";
   mainPoster.download(`frameflux-${slugify(title)}-${selectedRole}`);
+});
+
+gptImageBtn.addEventListener("click", () => {
+  const next = !useGptImage();
+  gptImageBtn.setAttribute("aria-pressed", next ? "true" : "false");
+  syncGptImageButton();
+  try {
+    localStorage.setItem(GPT_IMAGE_KEY, next ? "on" : "off");
+  } catch (err) {
+    /* ignore quota / private mode */
+  }
 });
 
 variationsEl.addEventListener("click", (event) => {

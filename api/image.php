@@ -46,6 +46,17 @@ file_put_contents('/Users/shady/Projects/FrameFlux/.cursor/debug-78eac4.log', $l
 // #endregion
 $title = (string) ($dna['concept']['title'] ?? $dna['title'] ?? 'Untitled');
 $timestamp = date('H:i:s');
+$useImage = !array_key_exists('useImage', $data) || $data['useImage'] !== false;
+
+if (!$useImage) {
+    error_log("[{$timestamp}] ℹ️ gpt-image-2 SKIPPED: Client opted out of key art for '{$title}'.");
+    echo json_encode([
+        'source' => 'skipped',
+        'image' => null,
+        'note' => 'GPT Image off — cinematic plate will be drawn locally from Visual DNA.',
+    ]);
+    exit;
+}
 
 if ($apiKey === '') {
     error_log("[{$timestamp}] ⚠️ gpt-image-2 SKIPPED: No API key resolved from config. Using procedural plate for '{$title}'.");
