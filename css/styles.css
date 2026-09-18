@@ -285,8 +285,11 @@ textarea:focus-visible,
 .poster-spinner-label {
   color: var(--ink);
   font-size: 0.78rem;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-align: center;
+  max-width: 16rem;
+  line-height: 1.45;
 }
 
 @keyframes poster-spin {

@@ -11,6 +11,7 @@ const meta = document.querySelector("#meta");
 const variationsEl = document.querySelector("#variations");
 const posterFrame = document.querySelector("#poster-frame");
 const posterSpinner = document.querySelector("#poster-spinner");
+const posterSpinnerLabel = document.querySelector("#poster-spinner-label");
 
 const ROLES = ["signature", "hybrid", "alternative"];
 const SEED_SHIFTS = { signature: 0, hybrid: 101, alternative: 211 };
@@ -27,6 +28,15 @@ let keyArt = null;
 let baseSeed = Date.now() % 100000;
 let selectedRole = "signature";
 const GPT_IMAGE_KEY = "frameflux-gpt-image";
+const waitClock = {
+  running: false,
+  startedAt: 0,
+  expected: null,
+  tickId: 0,
+  gptImage: "no",
+  mode: "generate",
+  averages: { enabled: 45, disabled: 10 },
+};
 
 function useGptImage() {
   return gptImageBtn.getAttribute("aria-pressed") === "true";
@@ -105,10 +115,117 @@ function enablePosterActions(enabled) {
   downloadBtn.disabled = !enabled;
 }
 
-function setPosterBusy(isBusy) {
+function expectedWaitSeconds(gptOn) {
+  const avg = gptOn ? waitClock.averages.enabled : waitClock.averages.disabled;
+  if (typeof avg === "number" && avg > 0) {
+    return avg;
+  }
+  return gptOn ? 45 : 10;
+}
+
+function waitElapsedSeconds() {
+  if (!waitClock.startedAt) {
+    return 0;
+  }
+  return Math.max(0, (performance.now() - waitClock.startedAt) / 1000);
+}
+
+function secondsLeftWaiting(elapsed, expected) {
+  if (typeof expected !== "number" || expected <= 0) {
+    return null;
+  }
+  return Math.max(0, expected - elapsed);
+}
+
+function formatWaitLabel(elapsed, left) {
+  const waited = `${elapsed.toFixed(0)}s waited`;
+  if (left === null) {
+    return `Composing poster… ${waited}`;
+  }
+  if (left <= 0) {
+    return `Composing poster… ${waited} · finishing`;
+  }
+  return `Composing poster… ${waited} · ${Math.ceil(left)}s left`;
+}
+
+function updateWaitLabel() {
+  const elapsed = waitElapsedSeconds();
+  const left = secondsLeftWaiting(elapsed, waitClock.expected);
+  posterSpinnerLabel.textContent = formatWaitLabel(elapsed, left);
+}
+
+async function loadWaitAverages() {
+  try {
+    const response = await fetch("api/wait.php");
+    const data = await response.json().catch(() => ({}));
+    if (typeof data.enabled === "number") {
+      waitClock.averages.enabled = data.enabled;
+    }
+    if (typeof data.disabled === "number") {
+      waitClock.averages.disabled = data.disabled;
+    }
+  } catch (err) {
+    /* keep defaults */
+  }
+}
+
+function recordWait(entry) {
+  fetch("api/wait.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(entry),
+  }).catch(() => {});
+}
+
+function startWaitClock(mode) {
+  if (waitClock.running) {
+    return;
+  }
+  waitClock.running = true;
+  waitClock.startedAt = performance.now();
+  waitClock.gptImage = useGptImage() ? "yes" : "no";
+  waitClock.mode = mode || "generate";
+  waitClock.expected = expectedWaitSeconds(waitClock.gptImage === "yes");
+  updateWaitLabel();
+  waitClock.tickId = window.setInterval(updateWaitLabel, 250);
+}
+
+function stopWaitClock({ ok, title } = {}) {
+  if (!waitClock.running) {
+    return 0;
+  }
+  const elapsed = waitElapsedSeconds();
+  const left = secondsLeftWaiting(elapsed, waitClock.expected);
+  window.clearInterval(waitClock.tickId);
+  waitClock.tickId = 0;
+  waitClock.running = false;
+  recordWait({
+    waited_seconds: Number(elapsed.toFixed(2)),
+    seconds_left: Number((left || 0).toFixed(2)),
+    expected_seconds: Number((waitClock.expected || 0).toFixed(2)),
+    gpt_image: waitClock.gptImage,
+    mode: waitClock.mode,
+    ok: !!ok,
+    title: title || "",
+  });
+  posterSpinnerLabel.textContent = "Composing poster…";
+  // #region agent log
+  fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'W',location:'js/app.js:stopWaitClock',message:'wait recorded',data:{elapsed,left,gptImage:waitClock.gptImage,mode:waitClock.mode,ok:!!ok},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  return elapsed;
+}
+
+loadWaitAverages();
+
+function setPosterBusy(isBusy, { mode, ok, title } = {}) {
   posterSpinner.hidden = !isBusy;
   posterFrame.classList.toggle("is-busy", isBusy);
   posterSpinner.setAttribute("aria-busy", isBusy ? "true" : "false");
+  if (isBusy) {
+    startWaitClock(mode);
+  } else {
+    stopWaitClock({ ok, title });
+  }
   // #region agent log
   fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'S',location:'js/app.js:setPosterBusy',message:'poster spinner',data:{isBusy,hidden:posterSpinner.hidden},timestamp:Date.now()})}).catch(()=>{});
   // #endregion
@@ -197,7 +314,8 @@ async function requestImage(dna) {
 
 async function compose({ mode, previous, interpreting }) {
   setError("");
-  setPosterBusy(true);
+  let ok = false;
+  setPosterBusy(true, { mode });
   try {
     setStatus(interpreting);
     visualDna = await requestDna({ mode, previous });
@@ -215,16 +333,18 @@ async function compose({ mode, previous, interpreting }) {
     const mood = visualDna.concept?.mood || visualDna.mood || "";
     const verb = mode === "improve" ? "Improved" : mode === "reimagine" ? "Reimagined" : "New design";
     setStatus(`${verb}${mood ? ` · ${mood}` : ""}${quote ? ` · “${quote}”` : ""}`);
+    ok = true;
   } finally {
-    setPosterBusy(false);
+    const title = visualDna?.concept?.title || visualDna?.title || filmPayload().title;
+    setPosterBusy(false, { ok, title });
   }
 }
 
-function busy(isBusy) {
+function busy(isBusy, mode) {
   generateBtn.disabled = isBusy;
   if (isBusy) {
     enablePosterActions(false);
-    setPosterBusy(true);
+    setPosterBusy(true, { mode });
   } else if (visualDna) {
     enablePosterActions(true);
   }
@@ -232,7 +352,7 @@ function busy(isBusy) {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  busy(true);
+  busy(true, "generate");
   try {
     await document.fonts.ready;
     await compose({
@@ -250,7 +370,7 @@ improveBtn.addEventListener("click", async () => {
   if (!visualDna) {
     return;
   }
-  busy(true);
+  busy(true, "improve");
   try {
     await compose({
       mode: "improve",
@@ -268,7 +388,7 @@ reimagineBtn.addEventListener("click", async () => {
   if (!visualDna) {
     return;
   }
-  busy(true);
+  busy(true, "reimagine");
   try {
     await compose({
       mode: "reimagine",
