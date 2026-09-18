@@ -387,6 +387,7 @@ textarea:focus-visible,
   flex-direction: column;
   justify-content: flex-end;
   gap: 0.85rem;
+  overflow: visible;
 }
 
 .wait-rail[hidden] {
@@ -398,6 +399,18 @@ textarea:focus-visible,
   justify-items: center;
   gap: 0.2rem;
   width: 100%;
+  transform-origin: 50% 100%;
+}
+
+.wait-companion-block.is-leaving {
+  pointer-events: none;
+  animation: pulp-leave 0.9s ease-in forwards;
+}
+
+.wait-companion-block.is-leaving .wait-companion-art,
+.wait-companion-block.is-leaving .fox-tail,
+.wait-companion-block.is-leaving .fox-lid {
+  animation: none;
 }
 
 .wait-companion {
@@ -539,6 +552,21 @@ textarea:focus-visible,
   }
   50% {
     transform: translateY(-8px) scale(1.04);
+  }
+}
+
+@keyframes pulp-leave {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  38% {
+    opacity: 1;
+    transform: translateY(7px) scale(0.98);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
   }
 }
 

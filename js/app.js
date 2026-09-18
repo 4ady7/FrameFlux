@@ -19,6 +19,7 @@ const keyArtOverlay = document.querySelector("#key-art-overlay");
 const keyArtLabel = document.querySelector("#key-art-label");
 const developTeaser = document.querySelector("#develop-teaser");
 const waitRail = document.querySelector("#wait-rail");
+const waitCompanionBlock = document.querySelector(".wait-companion-block");
 const waitCompanion = document.querySelector("#wait-companion");
 const waitCompanionLine = document.querySelector("#wait-companion-line");
 const teaserMetaphor = document.querySelector("#teaser-metaphor");
@@ -66,6 +67,7 @@ const companion = {
   announced: false,
   holdStage: false,
   greetTimer: 0,
+  leaveTimer: 0,
 };
 
 function companionScript() {
@@ -404,7 +406,13 @@ function showWaitCompanion() {
   if (!waitRail) {
     return;
   }
-  const alreadyOpen = !waitRail.hidden;
+  if (companion.leaveTimer) {
+    window.clearTimeout(companion.leaveTimer);
+    companion.leaveTimer = 0;
+  }
+  const wasLeaving = waitCompanionBlock?.classList.contains("is-leaving");
+  waitCompanionBlock?.classList.remove("is-leaving");
+  const alreadyOpen = !waitRail.hidden && !wasLeaving;
   waitRail.hidden = false;
   if (alreadyOpen) {
     return;
@@ -429,7 +437,7 @@ function showWaitCompanion() {
   speakCompanionLine(prompt, { onDone: releaseStageLabel });
 }
 
-function hideWaitCompanion() {
+function hideWaitCompanion({ immediate } = {}) {
   if (companion.greetTimer) {
     window.clearTimeout(companion.greetTimer);
     companion.greetTimer = 0;
@@ -437,9 +445,31 @@ function hideWaitCompanion() {
   companion.holdStage = false;
   stopCompanionSpeech();
   companion.announced = false;
-  if (waitRail) {
-    waitRail.hidden = true;
+  const hideNow = () => {
+    waitCompanionBlock?.classList.remove("is-leaving");
+    if (waitRail) {
+      waitRail.hidden = true;
+    }
+  };
+  if (!waitRail || waitRail.hidden) {
+    return;
   }
+  if (immediate || prefersReducedMotion() || !waitCompanionBlock) {
+    if (companion.leaveTimer) {
+      window.clearTimeout(companion.leaveTimer);
+      companion.leaveTimer = 0;
+    }
+    hideNow();
+    return;
+  }
+  if (waitCompanionBlock.classList.contains("is-leaving")) {
+    return;
+  }
+  waitCompanionBlock.classList.add("is-leaving");
+  companion.leaveTimer = window.setTimeout(() => {
+    companion.leaveTimer = 0;
+    hideNow();
+  }, 900);
 }
 
 function playWaitCompanion() {
