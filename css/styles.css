@@ -5,6 +5,7 @@
   --panel: #1a1714;
   --line: rgba(236, 230, 216, 0.12);
   --accent: #d8a24a;
+  --download: #6e92b8;
   --danger: #e07a4a;
   --focus: #f0d9a0;
 }
@@ -151,17 +152,76 @@ button {
 
 #improve,
 #regenerate,
-#reimagine,
-#download,
-#gpt-image {
+#reimagine {
   background: transparent;
   color: var(--ink);
   border: 1px solid var(--line);
 }
 
-#gpt-image[aria-pressed="true"] {
+#download {
+  background: var(--download);
+  color: #10141a;
+}
+
+.gpt-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.gpt-switch-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#gpt-image.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.15rem 0;
+  background: transparent;
+  color: var(--ink);
+  border: 0;
+}
+
+.switch-ui {
+  position: relative;
+  display: block;
+  width: 2.65rem;
+  height: 1.48rem;
+  border-radius: 999px;
+  background: rgba(236, 230, 216, 0.1);
+  border: 1px solid var(--line);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 1.18rem;
+  height: 1.18rem;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.2s ease;
+}
+
+#gpt-image[aria-checked="true"] .switch-ui {
+  background: rgba(216, 162, 74, 0.22);
   border-color: var(--accent);
-  color: var(--accent);
+}
+
+#gpt-image[aria-checked="true"] .switch-thumb {
+  transform: translateX(1.12rem);
+  background: var(--accent);
+}
+
+.switch-state {
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  min-width: 1.6rem;
 }
 
 .options {
@@ -187,7 +247,8 @@ button:disabled {
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
-.variation:focus-visible {
+.variation:focus-visible,
+#gpt-image:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 3px;
 }

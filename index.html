@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Archivo:wght@100;300;400;700;900&family=Caveat:wght@400;500;600;700&family=Cinzel:wght@400;500;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Jost:wght@200;300;400;500;700&family=Oswald:wght@200;300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,500;0,700;0,900;1,400;1,700&family=Roboto+Slab:wght@100;300;400;700;900&family=Saira+Stencil+One&family=Space+Grotesk:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=print-13" />
+    <link rel="stylesheet" href="css/styles.css?v=print-17" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -49,7 +49,23 @@
           </label>
 
           <div class="options">
-            <button type="button" id="gpt-image" aria-pressed="true" aria-describedby="gpt-image-hint">GPT Image on</button>
+            <div class="gpt-switch">
+              <span class="gpt-switch-label" id="gpt-image-label">GPT Image</span>
+              <button
+                type="button"
+                id="gpt-image"
+                class="switch"
+                role="switch"
+                aria-checked="true"
+                aria-labelledby="gpt-image-label"
+                aria-describedby="gpt-image-hint"
+              >
+                <span class="switch-ui" aria-hidden="true">
+                  <span class="switch-thumb"></span>
+                </span>
+                <span id="gpt-image-state" class="switch-state">On</span>
+              </button>
+            </div>
             <p class="hint" id="gpt-image-hint">
               On uses gpt-image-2 for cinematic key art. Off draws a local plate from Visual DNA.
             </p>
@@ -60,7 +76,7 @@
             <button type="button" id="improve" disabled>Improve</button>
             <button type="button" id="regenerate" disabled>Regenerate</button>
             <button type="button" id="reimagine" disabled>Reimagine</button>
-            <button type="button" id="download" disabled>Download PNG</button>
+            <button type="button" id="download" disabled>Download</button>
           </div>
         </form>
 
@@ -195,6 +211,6 @@
     <script src="js/systems.js?v=nature-5"></script>
     <script src="js/poster.js?v=nature-8"></script>
     <script src="js/companion-lines.js?v=pulp-3"></script>
-    <script src="js/app.js?v=print-16"></script>
+    <script src="js/app.js?v=print-17"></script>
   </body>
 </html>

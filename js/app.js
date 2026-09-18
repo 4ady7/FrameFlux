@@ -5,6 +5,7 @@ const regenerateBtn = document.querySelector("#regenerate");
 const reimagineBtn = document.querySelector("#reimagine");
 const downloadBtn = document.querySelector("#download");
 const gptImageBtn = document.querySelector("#gpt-image");
+const gptImageState = document.querySelector("#gpt-image-state");
 const statusEl = document.querySelector("#status");
 const errorEl = document.querySelector("#error");
 const meta = document.querySelector("#meta");
@@ -63,6 +64,8 @@ const companion = {
   speaking: false,
   speakGen: 0,
   announced: false,
+  holdStage: false,
+  greetTimer: 0,
 };
 
 function companionScript() {
@@ -70,18 +73,21 @@ function companionScript() {
 }
 
 function useGptImage() {
-  return gptImageBtn.getAttribute("aria-pressed") === "true";
+  return gptImageBtn.getAttribute("aria-checked") === "true";
 }
 
 function syncGptImageButton() {
   const on = useGptImage();
-  gptImageBtn.textContent = on ? "GPT Image on" : "GPT Image off";
+  gptImageBtn.setAttribute("aria-checked", on ? "true" : "false");
+  if (gptImageState) {
+    gptImageState.textContent = on ? "On" : "Off";
+  }
 }
 
 try {
   const stored = localStorage.getItem(GPT_IMAGE_KEY);
   if (stored === "off") {
-    gptImageBtn.setAttribute("aria-pressed", "false");
+    gptImageBtn.setAttribute("aria-checked", "false");
   }
 } catch (err) {
   /* ignore quota / private mode */
@@ -118,6 +124,10 @@ function filmPayload() {
     genre: document.querySelector("#genre").value.trim(),
     pitch: document.querySelector("#pitch").value.trim(),
   };
+}
+
+function hideMeta() {
+  meta.hidden = true;
 }
 
 function showMeta(dna) {
@@ -323,7 +333,7 @@ function stopCompanionSpeech() {
   }
 }
 
-function speakCompanionLine(text) {
+function speakCompanionLine(text, { onDone } = {}) {
   if (!window.speechSynthesis) {
     return;
   }
@@ -339,6 +349,16 @@ function speakCompanionLine(text) {
     utter.voice = voice;
     utter.lang = voice.lang || speech.lang || "en-GB";
   }
+  const finish = () => {
+    if (gen !== companion.speakGen) {
+      return;
+    }
+    companion.speaking = false;
+    waitCompanion?.classList.remove("is-speaking");
+    if (onDone) {
+      onDone();
+    }
+  };
   utter.onstart = () => {
     if (gen !== companion.speakGen) {
       return;
@@ -346,20 +366,8 @@ function speakCompanionLine(text) {
     companion.speaking = true;
     waitCompanion?.classList.add("is-speaking");
   };
-  utter.onend = () => {
-    if (gen !== companion.speakGen) {
-      return;
-    }
-    companion.speaking = false;
-    waitCompanion?.classList.remove("is-speaking");
-  };
-  utter.onerror = () => {
-    if (gen !== companion.speakGen) {
-      return;
-    }
-    companion.speaking = false;
-    waitCompanion?.classList.remove("is-speaking");
-  };
+  utter.onend = finish;
+  utter.onerror = finish;
   companion.speaking = true;
   waitCompanion?.classList.add("is-speaking");
   window.setTimeout(() => {
@@ -380,6 +388,18 @@ function nextCompanionLine() {
   return pool[companion.lineIndex];
 }
 
+function releaseStageLabel() {
+  if (companion.greetTimer) {
+    window.clearTimeout(companion.greetTimer);
+    companion.greetTimer = 0;
+  }
+  companion.holdStage = false;
+  if (posterFrame.classList.contains("is-busy")) {
+    keyArtOverlay.hidden = false;
+    updatePipelineCopy();
+  }
+}
+
 function showWaitCompanion() {
   if (!waitRail) {
     return;
@@ -391,6 +411,7 @@ function showWaitCompanion() {
   }
   companion.lineIndex = -1;
   companion.announced = true;
+  companion.holdStage = true;
   const prompt = companionScript().prompt || "Hi, my name is Pulp. Click me!";
   if (waitCompanionLine) {
     waitCompanionLine.textContent = prompt;
@@ -398,10 +419,22 @@ function showWaitCompanion() {
   if (window.speechSynthesis) {
     window.speechSynthesis.getVoices();
   }
-  speakCompanionLine(prompt);
+  if (companion.greetTimer) {
+    window.clearTimeout(companion.greetTimer);
+  }
+  companion.greetTimer = window.setTimeout(() => {
+    companion.greetTimer = 0;
+    releaseStageLabel();
+  }, window.speechSynthesis ? 4500 : 1800);
+  speakCompanionLine(prompt, { onDone: releaseStageLabel });
 }
 
 function hideWaitCompanion() {
+  if (companion.greetTimer) {
+    window.clearTimeout(companion.greetTimer);
+    companion.greetTimer = 0;
+  }
+  companion.holdStage = false;
   stopCompanionSpeech();
   companion.announced = false;
   if (waitRail) {
@@ -410,6 +443,7 @@ function hideWaitCompanion() {
 }
 
 function playWaitCompanion() {
+  releaseStageLabel();
   const line = nextCompanionLine();
   if (waitCompanionLine) {
     waitCompanionLine.textContent = line;
@@ -514,7 +548,8 @@ function setPosterBusy(isBusy, { mode, ok, title } = {}) {
     startWaitClock(mode);
     variationsEl.hidden = false;
     setVariationSpinners(true);
-    keyArtOverlay.hidden = false;
+    hideMeta();
+    keyArtOverlay.hidden = true;
     hideDevelopTeaser();
     showWaitCompanion();
     posterFrame.classList.add("is-busy");
@@ -540,7 +575,9 @@ function setPosterBusy(isBusy, { mode, ok, title } = {}) {
 function setPlateDeveloping(isDeveloping, { teaser = true, speed = 1 } = {}) {
   if (isDeveloping) {
     waitClock.plateAt = performance.now();
-    keyArtOverlay.hidden = false;
+    if (!companion.holdStage) {
+      keyArtOverlay.hidden = false;
+    }
     posterFrame.classList.add("is-developing", "is-busy");
     if (exposeRail) {
       exposeRail.hidden = false;
@@ -699,7 +736,6 @@ async function compose({ mode, previous, interpreting }) {
     incomingKeyArt = null;
     baseSeed = Math.floor(Math.random() * 1_000_000);
     selectedRole = "signature";
-    showMeta(visualDna);
     regenerateBtn.disabled = false;
     downloadBtn.disabled = false;
     for (const role of ROLES) {
@@ -727,9 +763,11 @@ async function compose({ mode, previous, interpreting }) {
       } else {
         stopPlateDevelop();
         renderAll();
+        showMeta(visualDna);
       }
     } else {
       renderAll();
+      showMeta(visualDna);
     }
     if (job !== composeJob) {
       return;
@@ -839,7 +877,7 @@ downloadBtn.addEventListener("click", () => {
 
 gptImageBtn.addEventListener("click", () => {
   const next = !useGptImage();
-  gptImageBtn.setAttribute("aria-pressed", next ? "true" : "false");
+  gptImageBtn.setAttribute("aria-checked", next ? "true" : "false");
   syncGptImageButton();
   try {
     localStorage.setItem(GPT_IMAGE_KEY, next ? "on" : "off");
