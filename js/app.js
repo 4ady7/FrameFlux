@@ -205,14 +205,12 @@ function pipelineStage() {
   const sincePlate = waitClock.plateAt
     ? (performance.now() - waitClock.plateAt) / 1000
     : 0;
-  if (sincePlate < 10) {
+  const marks = window.FrameFluxPoster?.LIVING_PLATE || { geometry: 7, atmosphere: 16 };
+  if (sincePlate < marks.geometry) {
     return "setting";
   }
-  if (sincePlate < 20) {
+  if (sincePlate < marks.atmosphere) {
     return "exposing";
-  }
-  if (sincePlate < 40) {
-    return "grading";
   }
   return "grading";
 }

@@ -2541,6 +2541,15 @@ function dummySampler() {
   };
 }
 
+const LIVING_PLATE = {
+  geometry: 7,
+  atmosphere: 16,
+  narrative: 25,
+  print: 29,
+  type: 29,
+  complete: 38,
+};
+
 function livingGate(elapsed, start, dur) {
   if (elapsed < start) {
     return 0;
@@ -2553,18 +2562,19 @@ function livingGate(elapsed, start, dur) {
 
 function livingLayers(elapsed) {
   const t = Math.max(0, elapsed);
-  const gridHold = t >= 40 ? 1 - livingGate(t, 40, 1.1) : 1;
+  const typeAt = LIVING_PLATE.type;
+  const gridHold = t >= typeAt ? 1 - livingGate(t, typeAt, 1.1) : 1;
   return {
     elapsed: t,
-    geometry: livingGate(t, 0, 2.2),
-    wash: livingGate(t, 10, 5),
-    topography: livingGate(t, 10, 8),
-    grid: livingGate(t, 11, 6) * gridHold,
-    anchor: livingGate(t, 20, 5),
-    contour: Math.max(0, Math.min(1, (t - 20) / 10)),
-    specks: livingGate(t, 30, 4),
-    halftone: livingGate(t, 31, 4),
-    type: t >= 40 ? 1 : 0,
+    geometry: livingGate(t, 0, 1.6),
+    wash: livingGate(t, LIVING_PLATE.geometry, 5),
+    topography: livingGate(t, LIVING_PLATE.geometry, 8),
+    grid: livingGate(t, LIVING_PLATE.geometry + 1, 6) * gridHold,
+    anchor: livingGate(t, LIVING_PLATE.atmosphere, 5),
+    contour: Math.max(0, Math.min(1, (t - LIVING_PLATE.atmosphere) / (LIVING_PLATE.narrative - LIVING_PLATE.atmosphere))),
+    specks: livingGate(t, LIVING_PLATE.narrative, LIVING_PLATE.print - LIVING_PLATE.narrative),
+    halftone: livingGate(t, LIVING_PLATE.narrative + 0.5, LIVING_PLATE.print - LIVING_PLATE.narrative - 0.5),
+    type: t >= typeAt ? 1 : 0,
   };
 }
 
@@ -2762,18 +2772,18 @@ function createPoster(containerId, options = {}) {
     const fx = plan ? plan.focalX : Number(dnaComp(dna).focalX ?? 0.5);
     const fy = plan ? plan.focalY : Number(dnaComp(dna).focalY ?? 0.42);
 
-    if (layers.elapsed >= 10 && !liveCache.geo) {
+    if (layers.elapsed >= LIVING_PLATE.geometry && !liveCache.geo) {
       liveCache.geo = captureLive(liveCache.geo, (g) => {
         drawPlateGeometry(g, dna, nextSeed, spec, 1);
       });
     }
-    if (layers.elapsed >= 20 && liveCache.geo && !liveCache.atmosphere) {
+    if (layers.elapsed >= LIVING_PLATE.atmosphere && liveCache.geo && !liveCache.atmosphere) {
       liveCache.atmosphere = captureLive(liveCache.atmosphere, (g) => {
         g.image(liveCache.geo, 0, 0, POSTER_W, POSTER_H);
         drawPlateAtmosphere(g, dna, nextSeed, spec, 1, 1);
       });
     }
-    if (layers.elapsed >= 30 && liveCache.atmosphere && !liveCache.narrative) {
+    if (layers.elapsed >= LIVING_PLATE.narrative && liveCache.atmosphere && !liveCache.narrative) {
       liveCache.narrative = captureLive(liveCache.narrative, (g) => {
         g.image(liveCache.atmosphere, 0, 0, POSTER_W, POSTER_H);
         drawNarrativeAnchor(g, dna, nextSeed, fx, fy);
@@ -2782,7 +2792,7 @@ function createPoster(containerId, options = {}) {
         }
       });
     }
-    if (layers.elapsed >= 35 && liveCache.narrative && !liveCache.print) {
+    if (layers.elapsed >= LIVING_PLATE.print && liveCache.narrative && !liveCache.print) {
       liveCache.print = captureLive(liveCache.print, (g) => {
         g.image(liveCache.narrative, 0, 0, POSTER_W, POSTER_H);
         drawMaterialGrain(g, dna, nextSeed, materialEmphasis(dna, nextSeed));
@@ -2792,9 +2802,9 @@ function createPoster(containerId, options = {}) {
       });
     }
 
-    if (liveCache.print && layers.elapsed >= 35) {
+    if (liveCache.print && layers.elapsed >= LIVING_PLATE.print) {
       target.image(liveCache.print, 0, 0, POSTER_W, POSTER_H);
-    } else if (liveCache.narrative && layers.elapsed >= 30) {
+    } else if (liveCache.narrative && layers.elapsed >= LIVING_PLATE.narrative) {
       target.image(liveCache.narrative, 0, 0, POSTER_W, POSTER_H);
       if (layers.specks > 0.01) {
         target.push();
@@ -2807,7 +2817,7 @@ function createPoster(containerId, options = {}) {
         target.pop();
         target.blendMode(target.BLEND);
       }
-    } else if (liveCache.atmosphere && layers.elapsed >= 20) {
+    } else if (liveCache.atmosphere && layers.elapsed >= LIVING_PLATE.atmosphere) {
       target.image(liveCache.atmosphere, 0, 0, POSTER_W, POSTER_H);
       if (layers.anchor > 0.01) {
         target.push();
@@ -2819,7 +2829,7 @@ function createPoster(containerId, options = {}) {
       if (window.FrameFluxSystems && layers.contour > 0) {
         window.FrameFluxSystems.drawContourField(target, dna, nextSeed, plan, layers.contour);
       }
-    } else if (liveCache.geo && layers.elapsed >= 10) {
+    } else if (liveCache.geo && layers.elapsed >= LIVING_PLATE.geometry) {
       target.image(liveCache.geo, 0, 0, POSTER_W, POSTER_H);
       drawPlateAtmosphere(target, dna, nextSeed, spec, layers.wash, layers.topography);
     } else {
@@ -2867,7 +2877,8 @@ function createPoster(containerId, options = {}) {
       }
       p5Instance.redraw();
       const elapsed = livingElapsed();
-      const interval = elapsed >= 20 && elapsed < 30 ? 33 : 55;
+      const interval =
+        elapsed >= LIVING_PLATE.atmosphere && elapsed < LIVING_PLATE.narrative ? 33 : 55;
       livingRaf = requestAnimationFrame(function queued(t2) {
         if (gen !== livingGen) {
           return;
@@ -3180,6 +3191,7 @@ function createPoster(containerId, options = {}) {
 }
 
 window.FrameFluxPoster = {
+  LIVING_PLATE,
   createPoster,
   layoutSpec,
   typeLayout,
