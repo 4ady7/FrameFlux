@@ -666,10 +666,54 @@ function renderAll() {
   posterFrame.querySelector("#poster").setAttribute("aria-label", `Selected ${selectedRole} poster for ${title}`);
 }
 
+function variationLayoutLabels(dna) {
+  const mode = humanizeDna(dna?.composition?.mode || dna?.layout || "central-focus") || "central focus";
+  const layout = humanizeDna(dna?.composition?.layout || dna?.layout || "");
+  const place = humanizeDna(
+    window.FrameFluxPoster?.titleFace?.(dna)?.placement ||
+      dna?.letterform?.placement ||
+      dna?.typography?.placement ||
+      dna?.composition?.titlePlacement ||
+      ""
+  );
+  const primary = humanizeDna(dna?.procedural?.primaryPattern || dna?.pattern || "");
+  const secondary = humanizeDna(dna?.procedural?.secondaryPattern || "");
+  const used = new Set([mode.toLowerCase()]);
+  const take = (candidates) => {
+    for (const item of candidates) {
+      const key = String(item || "").toLowerCase();
+      if (item && !used.has(key)) {
+        used.add(key);
+        return item;
+      }
+    }
+    return "";
+  };
+  return {
+    signature: mode,
+    hybrid: take([layout, place, primary]) || `${mode} mix`,
+    alternative: take([place, secondary, layout, primary]) || `${mode} turn`,
+  };
+}
+
+function updateVariationLabels(dna) {
+  const labels = variationLayoutLabels(dna);
+  document.querySelectorAll(".variation").forEach((btn) => {
+    const label = btn.querySelector(".variation-label");
+    const role = btn.dataset.role;
+    if (label && labels[role]) {
+      label.textContent = labels[role];
+    }
+  });
+}
+
 function updateSelectionUi() {
   document.querySelectorAll(".variation").forEach((btn) => {
     btn.setAttribute("aria-pressed", btn.dataset.role === selectedRole ? "true" : "false");
   });
+  if (visualDna) {
+    updateVariationLabels(visualDna);
+  }
 }
 
 function previousPayload() {

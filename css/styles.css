@@ -679,6 +679,12 @@ textarea:focus-visible,
   border: 1px solid var(--line);
   color: var(--ink);
   text-align: left;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.variation:hover,
+.variation:focus-visible {
+  transform: translateY(-4px);
 }
 
 .variation[aria-pressed="true"] {
@@ -690,6 +696,13 @@ textarea:focus-visible,
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
+  min-height: 1.1em;
+}
+
+.variation:hover .variation-label,
+.variation:focus-visible .variation-label,
+.variation[aria-pressed="true"] .variation-label {
+  color: var(--ink);
 }
 
 .companion-review {
