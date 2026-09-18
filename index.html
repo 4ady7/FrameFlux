@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Archivo:wght@100;300;400;700;900&family=Caveat:wght@400;500;600;700&family=Cinzel:wght@400;500;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Jost:wght@200;300;400;500;700&family=Oswald:wght@200;300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,500;0,700;0,900;1,400;1,700&family=Roboto+Slab:wght@100;300;400;700;900&family=Saira+Stencil+One&family=Space+Grotesk:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=print-11" />
+    <link rel="stylesheet" href="css/styles.css?v=print-13" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -103,19 +103,48 @@
               <span id="key-art-label">Setting type…</span>
             </p>
           </div>
-          <aside id="develop-teaser" class="develop-teaser" hidden>
-            <p class="teaser-kicker">This poster</p>
-            <dl>
-              <div>
-                <dt>Metaphor</dt>
-                <dd id="teaser-metaphor"></dd>
-              </div>
-              <div>
-                <dt>Material</dt>
-                <dd id="teaser-material"></dd>
-              </div>
-            </dl>
-            <blockquote id="teaser-quote"></blockquote>
+          <aside id="wait-rail" class="wait-rail" hidden>
+            <div class="wait-companion-block">
+              <button type="button" id="wait-companion" class="wait-companion" aria-label="Pulp, the darkroom fox. Click to hear a line.">
+                <span class="wait-companion-art" aria-hidden="true">
+                  <svg viewBox="0 0 160 176" xmlns="http://www.w3.org/2000/svg">
+                    <ellipse class="fox-tail" cx="34" cy="118" rx="28" ry="42" />
+                    <ellipse class="fox-tail-tip" cx="22" cy="92" rx="14" ry="18" />
+                    <ellipse class="fox-body" cx="88" cy="124" rx="42" ry="36" />
+                    <ellipse class="fox-fluff" cx="98" cy="132" rx="22" ry="24" />
+                    <ellipse class="fox-paw" cx="68" cy="154" rx="12" ry="8" />
+                    <ellipse class="fox-paw" cx="108" cy="154" rx="12" ry="8" />
+                    <polygon class="fox-ear fox-ear-l" points="62,48 54,10 84,38" />
+                    <polygon class="fox-ear-in fox-ear-l" points="64,42 58,18 80,38" />
+                    <polygon class="fox-ear fox-ear-r" points="118,50 138,12 100,40" />
+                    <polygon class="fox-ear-in fox-ear-r" points="116,44 132,20 102,40" />
+                    <circle class="fox-head" cx="92" cy="58" r="32" />
+                    <ellipse class="fox-muzzle" cx="98" cy="72" rx="16" ry="12" />
+                    <circle class="fox-eye" cx="82" cy="54" r="4.2" />
+                    <circle class="fox-eye" cx="108" cy="54" r="4.2" />
+                    <rect class="fox-lid" x="76" y="48" width="12" height="10" rx="4" />
+                    <rect class="fox-lid" x="102" y="48" width="12" height="10" rx="4" />
+                    <ellipse class="fox-nose" cx="108" cy="70" rx="4.5" ry="3.2" />
+                  </svg>
+                </span>
+                <span class="wait-companion-name">Pulp</span>
+              </button>
+              <p id="wait-companion-line" class="wait-companion-line" role="status" aria-live="polite">The still is shy. Click me.</p>
+            </div>
+            <div id="develop-teaser" class="develop-teaser" hidden>
+              <p class="teaser-kicker">This poster</p>
+              <dl>
+                <div>
+                  <dt>Metaphor</dt>
+                  <dd id="teaser-metaphor"></dd>
+                </div>
+                <div>
+                  <dt>Material</dt>
+                  <dd id="teaser-material"></dd>
+                </div>
+              </dl>
+              <blockquote id="teaser-quote"></blockquote>
+            </div>
           </aside>
         </div>
         <div class="variations" id="variations" hidden>
@@ -165,6 +194,7 @@
     <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
     <script src="js/systems.js?v=nature-5"></script>
     <script src="js/poster.js?v=nature-6"></script>
-    <script src="js/app.js?v=print-11"></script>
+    <script src="js/companion-lines.js?v=pulp-2"></script>
+    <script src="js/app.js?v=print-14"></script>
   </body>
 </html>

@@ -8,10 +8,12 @@ header('X-Content-Type-Options: nosniff');
 $dir = dirname(__DIR__) . '/data';
 $path = $dir . '/generation-waits.csv';
 $headers = [
+    'timestamp',
+    'waited_seconds',
+    'gpt_image',
+    'mode',
+    'ok',
     'title',
-    'runtime',
-    'date',
-    'gpt_image_status',
 ];
 
 function waitCsvAverages(string $path): array
@@ -91,8 +93,6 @@ if (!is_array($data)) {
 }
 
 $waited = round((float) ($data['waited_seconds'] ?? -1), 2);
-$secondsLeft = max(0, round((float) ($data['seconds_left'] ?? 0), 2));
-$expected = round((float) ($data['expected_seconds'] ?? 0), 2);
 $gptImage = ($data['gpt_image'] ?? '') === true || ($data['gpt_image'] ?? '') === 'yes' ? 'yes' : 'no';
 $mode = trim((string) ($data['mode'] ?? 'generate'));
 $ok = !empty($data['ok']) ? 'yes' : 'no';
@@ -137,8 +137,6 @@ if ($needsHeader) {
 fputcsv($handle, [
     gmdate('c'),
     number_format($waited, 2, '.', ''),
-    number_format($secondsLeft, 2, '.', ''),
-    number_format($expected, 2, '.', ''),
     $gptImage,
     $mode,
     $ok,

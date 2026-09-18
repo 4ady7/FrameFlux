@@ -17,6 +17,9 @@ const variationWaits = document.querySelectorAll(".variation-wait");
 const keyArtOverlay = document.querySelector("#key-art-overlay");
 const keyArtLabel = document.querySelector("#key-art-label");
 const developTeaser = document.querySelector("#develop-teaser");
+const waitRail = document.querySelector("#wait-rail");
+const waitCompanion = document.querySelector("#wait-companion");
+const waitCompanionLine = document.querySelector("#wait-companion-line");
 const teaserMetaphor = document.querySelector("#teaser-metaphor");
 const teaserMaterial = document.querySelector("#teaser-material");
 const teaserQuote = document.querySelector("#teaser-quote");
@@ -55,6 +58,15 @@ const plateDevelop = {
   speed: 1,
   last: null,
 };
+const companion = {
+  lineIndex: -1,
+  speaking: false,
+  speakGen: 0,
+};
+
+function companionScript() {
+  return window.FrameFluxCompanion || { prompt: "", lines: [], speech: {}, dnaLines: () => [] };
+}
 
 function useGptImage() {
   return gptImageBtn.getAttribute("aria-pressed") === "true";
@@ -268,6 +280,127 @@ function hideDevelopTeaser() {
   developTeaser.hidden = true;
 }
 
+function pickCompanionVoice() {
+  if (!window.speechSynthesis) {
+    return null;
+  }
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) {
+    return null;
+  }
+  const prefer = companionScript().speech?.prefer || [];
+  const named = prefer
+    .map((name) => voices.find((voice) => voice.name.toLowerCase() === String(name).toLowerCase()))
+    .find(Boolean);
+  if (named) {
+    return named;
+  }
+  const uk = voices.filter((voice) => /en(-|_)GB/i.test(voice.lang) || /uk english/i.test(voice.name));
+  return (
+    uk.find((voice) => /female|woman|girl/i.test(voice.name)) ||
+    uk[0] ||
+    voices.find((voice) => /^en/i.test(voice.lang)) ||
+    null
+  );
+}
+
+function stopCompanionSpeech() {
+  companion.speakGen += 1;
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+  companion.speaking = false;
+  if (waitCompanion) {
+    waitCompanion.classList.remove("is-speaking");
+  }
+}
+
+function speakCompanionLine(text) {
+  if (!window.speechSynthesis) {
+    return;
+  }
+  stopCompanionSpeech();
+  const gen = ++companion.speakGen;
+  const utter = new SpeechSynthesisUtterance(text);
+  const speech = companionScript().speech || {};
+  utter.rate = Number(speech.rate) || 0.9;
+  utter.pitch = Number(speech.pitch) || 1;
+  utter.lang = speech.lang || "en-GB";
+  const voice = pickCompanionVoice();
+  if (voice) {
+    utter.voice = voice;
+    utter.lang = voice.lang || speech.lang || "en-GB";
+  }
+  utter.onstart = () => {
+    if (gen !== companion.speakGen) {
+      return;
+    }
+    companion.speaking = true;
+    waitCompanion?.classList.add("is-speaking");
+  };
+  utter.onend = () => {
+    if (gen !== companion.speakGen) {
+      return;
+    }
+    companion.speaking = false;
+    waitCompanion?.classList.remove("is-speaking");
+  };
+  utter.onerror = () => {
+    if (gen !== companion.speakGen) {
+      return;
+    }
+    companion.speaking = false;
+    waitCompanion?.classList.remove("is-speaking");
+  };
+  companion.speaking = true;
+  waitCompanion?.classList.add("is-speaking");
+  window.setTimeout(() => {
+    if (gen !== companion.speakGen || !window.speechSynthesis) {
+      return;
+    }
+    window.speechSynthesis.speak(utter);
+  }, 40);
+}
+
+function nextCompanionLine() {
+  const script = companionScript();
+  const pool = script.lines || [];
+  if (!pool.length) {
+    return script.prompt || "";
+  }
+  companion.lineIndex = (companion.lineIndex + 1) % pool.length;
+  return pool[companion.lineIndex];
+}
+
+function showWaitCompanion() {
+  if (!waitRail) {
+    return;
+  }
+  waitRail.hidden = false;
+  companion.lineIndex = -1;
+  if (waitCompanionLine) {
+    waitCompanionLine.textContent = companionScript().prompt || "Click me.";
+  }
+  if (window.speechSynthesis) {
+    window.speechSynthesis.getVoices();
+  }
+}
+
+function hideWaitCompanion() {
+  stopCompanionSpeech();
+  if (waitRail) {
+    waitRail.hidden = true;
+  }
+}
+
+function playWaitCompanion() {
+  const line = nextCompanionLine();
+  if (waitCompanionLine) {
+    waitCompanionLine.textContent = line;
+  }
+  speakCompanionLine(line);
+}
+
 function currentDevelop() {
   return plateDevelop.last && plateDevelop.last.living ? plateDevelop.last : null;
 }
@@ -342,14 +475,11 @@ function stopWaitClock({ ok, title } = {}) {
     return 0;
   }
   const elapsed = waitElapsedSeconds();
-  const left = secondsLeftWaiting(elapsed, waitClock.expected);
   window.clearInterval(waitClock.tickId);
   waitClock.tickId = 0;
   waitClock.running = false;
   recordWait({
     waited_seconds: Number(elapsed.toFixed(2)),
-    seconds_left: Number((left || 0).toFixed(2)),
-    expected_seconds: Number((waitClock.expected || 0).toFixed(2)),
     gpt_image: waitClock.gptImage,
     mode: waitClock.mode,
     ok: !!ok,
@@ -370,6 +500,7 @@ function setPosterBusy(isBusy, { mode, ok, title } = {}) {
     setVariationSpinners(true);
     keyArtOverlay.hidden = false;
     hideDevelopTeaser();
+    showWaitCompanion();
     posterFrame.classList.add("is-busy");
     posterFrame.classList.remove("is-developing");
     if (exposeRail) {
@@ -381,6 +512,7 @@ function setPosterBusy(isBusy, { mode, ok, title } = {}) {
     setVariationSpinners(false);
     keyArtOverlay.hidden = true;
     hideDevelopTeaser();
+    hideWaitCompanion();
     posterFrame.classList.remove("is-busy", "is-developing");
     if (exposeRail) {
       exposeRail.hidden = true;
@@ -440,6 +572,7 @@ async function revealKeyArt(image) {
   incomingKeyArt = image;
   keyArtOverlay.hidden = true;
   hideDevelopTeaser();
+  hideWaitCompanion();
   posterFrame.classList.remove("is-developing");
   if (exposeRail) {
     exposeRail.hidden = true;
@@ -723,3 +856,78 @@ variationsEl.addEventListener("click", (event) => {
   const title = visualDna.concept?.title || visualDna.title || "poster";
   posterFrame.querySelector("#poster").setAttribute("aria-label", `Selected ${selectedRole} poster for ${title}`);
 });
+
+if (waitCompanion) {
+  waitCompanion.addEventListener("click", () => {
+    playWaitCompanion();
+  });
+}
+if (window.speechSynthesis) {
+  window.speechSynthesis.addEventListener("voiceschanged", () => {
+    window.speechSynthesis.getVoices();
+  });
+}
+window.addEventListener("pagehide", () => {
+  stopCompanionSpeech();
+});
+
+function companionReviewLines() {
+  const script = companionScript();
+  return [script.prompt, ...(script.lines || [])].filter(Boolean);
+}
+
+function mountCompanionReview() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("pulp") !== "review") {
+    return;
+  }
+  const script = companionScript();
+  const panel = document.createElement("section");
+  panel.className = "companion-review";
+  panel.innerHTML = `
+    <h2>Pulp audio review</h2>
+    <p>Edit lines in <code>js/companion-lines.js</code>, then refresh this page. Play each line to hear the current voice.</p>
+    <div class="companion-review-voice">
+      <label>Rate <input id="pulp-rate" type="number" min="0.5" max="1.4" step="0.05" value="${script.speech?.rate ?? 0.9}" /></label>
+      <label>Pitch <input id="pulp-pitch" type="number" min="0.6" max="1.6" step="0.02" value="${script.speech?.pitch ?? 1.18}" /></label>
+      <p id="pulp-voice-name" class="companion-review-meta"></p>
+    </div>
+    <ol id="pulp-lines"></ol>
+  `;
+  document.body.append(panel);
+  const list = panel.querySelector("#pulp-lines");
+  const rateEl = panel.querySelector("#pulp-rate");
+  const pitchEl = panel.querySelector("#pulp-pitch");
+  const voiceName = panel.querySelector("#pulp-voice-name");
+  const syncVoice = () => {
+    if (!script.speech) {
+      script.speech = {};
+    }
+    script.speech.rate = Number(rateEl.value);
+    script.speech.pitch = Number(pitchEl.value);
+    const voice = pickCompanionVoice();
+    voiceName.textContent = voice ? `Voice: ${voice.name} (${voice.lang})` : "Voice: browser default";
+  };
+  rateEl.addEventListener("change", syncVoice);
+  pitchEl.addEventListener("change", syncVoice);
+  syncVoice();
+  companionReviewLines().forEach((line, index) => {
+    const item = document.createElement("li");
+    const play = document.createElement("button");
+    play.type = "button";
+    play.textContent = "Play";
+    play.addEventListener("click", () => {
+      if (waitCompanionLine) {
+        waitCompanionLine.textContent = line;
+      }
+      speakCompanionLine(line);
+    });
+    const text = document.createElement("span");
+    text.textContent = `${index + 1}. ${line}`;
+    item.append(play, text);
+    list.append(item);
+  });
+}
+
+mountCompanionReview();
+
