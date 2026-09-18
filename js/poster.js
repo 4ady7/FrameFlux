@@ -2281,7 +2281,7 @@ function drawQuotePlate(ctx, rect, strength) {
   ctx.restore();
 }
 
-function drawTypography(p, dna, spec, sampler, seed) {
+function drawTypography(p, dna, spec, sampler, seed, typeReveal) {
   const pal = dnaPalette(dna);
   const ctx = p.drawingContext;
   const colors = {
@@ -2293,6 +2293,8 @@ function drawTypography(p, dna, spec, sampler, seed) {
   const face = titleFace(dna);
   const quote = quoteFace(dna);
   const light = lightOrigin(dna, seed);
+  const titleA = typeReveal ? Number(typeReveal.title ?? 1) : 1;
+  const quoteA = typeReveal ? Number(typeReveal.quote ?? 1) : 1;
 
   const isSplitColumn = spec.id === "split-editorial";
   const maxTitleWidth = spec.plan ? spec.plan.title.w : isSplitColumn ? POSTER_W * 0.4 : POSTER_W * 0.8;
@@ -2329,22 +2331,25 @@ function drawTypography(p, dna, spec, sampler, seed) {
   const textLum = relativeLuminance(colors.text);
   const treatment = resolveTitleTreatment(face.structure, sampler, titleRect, textLum);
 
-  if (treatment.scrim > 0) {
+  if (treatment.scrim > 0 && titleA > 0.02) {
     const contrast = dnaProc(dna).contrast || dna.contrast || 0.75;
-    drawContrastBackdrop(p, titleTop + titleH / 2, titleH, contrast * treatment.scrim);
+    drawContrastBackdrop(p, titleTop + titleH / 2, titleH, contrast * treatment.scrim * titleA);
   }
 
-  p.randomSeed(seed + 909);
-  ctx.save();
-  ctx.textAlign = align;
-  titleLines.forEach((line, i) => {
-    drawTitleLine(p, ctx, line, x, titleTop + i * lineHeight, titleSize, face, treatment.structure, colors, light);
-  });
-  ctx.restore();
+  if (titleA > 0.02) {
+    p.randomSeed(seed + 909);
+    ctx.save();
+    ctx.globalAlpha *= titleA;
+    ctx.textAlign = align;
+    titleLines.forEach((line, i) => {
+      drawTitleLine(p, ctx, line, x, titleTop + i * lineHeight, titleSize, face, treatment.structure, colors, light);
+    });
+    ctx.restore();
+  }
 
   // --- Quote: its own face, hierarchy, placement, and legibility technique ---
   const quoteText = String(dna.concept?.quote || dna.quote || "").trim();
-  if (!quoteText) {
+  if (!quoteText || quoteA <= 0.02) {
     if (LETTER_SPACING_SUPPORTED) {
       ctx.letterSpacing = "0em";
     }
@@ -2424,16 +2429,20 @@ function drawTypography(p, dna, spec, sampler, seed) {
           : align === "right"
             ? x - measuredWidest - padX
             : x - padX;
+    ctx.save();
+    ctx.globalAlpha *= quoteA;
     drawQuotePlate(
       p.drawingContext,
       { x: plateX, y: quoteTop - padY, w: measuredWidest + padX * 2, h: quoteH + padY * 1.6 },
       1 - Math.min(1, quoteSeparation / 0.34)
     );
+    ctx.restore();
   } else if (technique === "scrim") {
-    drawContrastBackdrop(p, quoteTop + quoteH / 2, quoteH * 0.9, 0.42);
+    drawContrastBackdrop(p, quoteTop + quoteH / 2, quoteH * 0.9, 0.42 * quoteA);
   }
 
   ctx.save();
+  ctx.globalAlpha *= quoteA;
   ctx.textAlign = spec.quoteBox ? "left" : align;
   ctx.textBaseline = "top";
   styleCtx(ctx, quoteFaceSpec, quoteSize);
@@ -2456,6 +2465,25 @@ function drawTypography(p, dna, spec, sampler, seed) {
 
   if (LETTER_SPACING_SUPPORTED) {
     ctx.letterSpacing = "0em";
+  }
+}
+
+function drawDevelopVeil(p, develop, seed) {
+  const grain = Number(develop.grain ?? 0);
+  const exposure = Number(develop.exposure ?? 1);
+  if (grain > 0.02) {
+    p.randomSeed(seed + Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 160));
+    p.noStroke();
+    const n = Math.floor(280 * grain);
+    for (let i = 0; i < n; i++) {
+      p.fill(228, 218, 198, p.random(12, 80) * grain);
+      p.rect(p.random(POSTER_W), p.random(POSTER_H), p.random(1, 2.6), p.random(1, 2.6));
+    }
+  }
+  if (exposure < 0.995) {
+    p.noStroke();
+    p.fill(6, 5, 4, (1 - exposure) * 248);
+    p.rect(0, 0, POSTER_W, POSTER_H);
   }
 }
 
@@ -2487,6 +2515,7 @@ function createPoster(containerId, options = {}) {
   let seed = 1;
   let role = "signature";
   let keyArt = null;
+  let develop = null;
   let p5Instance = null;
   const density = options.pixelDensity || 2;
 
@@ -2553,8 +2582,14 @@ function createPoster(containerId, options = {}) {
         window.FrameFluxSystems.drawConnectionLines(p, current, seed, plan, spec);
         window.FrameFluxSystems.drawStatusColumn(p, current, seed, plan);
       }
-      drawTypography(p, current, spec, sampler, seed);
-      if (window.FrameFluxSystems) {
+      if (develop && !keyArt) {
+        drawDevelopVeil(p, develop, seed);
+      }
+      const typeReveal = develop && !keyArt
+        ? { quote: Number(develop.quote ?? 1), title: Number(develop.title ?? 1) }
+        : null;
+      drawTypography(p, current, spec, sampler, seed, typeReveal);
+      if (window.FrameFluxSystems && (!typeReveal || typeReveal.title > 0.55)) {
         window.FrameFluxSystems.drawRefLabel(p, current, seed, plan);
         const afterType = buildSampler(p);
         window.FrameFluxSystems.drawPrintFinish(p, current, seed, afterType);
@@ -2565,16 +2600,17 @@ function createPoster(containerId, options = {}) {
   p5Instance = new p5(sketch, containerId);
 
   return {
-    render(params, nextSeed, nextRole, image) {
+    render(params, nextSeed, nextRole, image, nextDevelop) {
       current = params;
       seed = nextSeed;
       role = nextRole || "signature";
       keyArt = image || null;
+      develop = nextDevelop || null;
       p5Instance.redraw();
       // Canvas text does not trigger webfont loading, so redraw once the exact
       // weights this DNA asked for have arrived.
       ensureTypeFaces(params).then((loaded) => {
-        if (loaded && current === params) {
+        if (loaded && current === params && !develop) {
           p5Instance.redraw();
         }
       });

@@ -34,13 +34,7 @@ function openaiChatJson(
 
     $response = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlErr = curl_error($ch);
     curl_close($ch);
-    // #region agent log
-    $decodedErr = is_string($response) ? json_decode($response, true) : null;
-    $log = json_encode(['sessionId' => '78eac4', 'runId' => 'post-fix', 'hypothesisId' => 'F', 'location' => 'api/lib/openai.php:openaiChatJson', 'message' => 'openai chat result', 'data' => ['status' => $status, 'curlErr' => $curlErr, 'model' => $model, 'errType' => $decodedErr['error']['code'] ?? $decodedErr['error']['type'] ?? null, 'errMsg' => isset($decodedErr['error']['message']) ? substr((string) $decodedErr['error']['message'], 0, 160) : null], 'timestamp' => (int) (microtime(true) * 1000)]) . "\n";
-    file_put_contents('/Users/shady/Projects/FrameFlux/.cursor/debug-78eac4.log', $log, FILE_APPEND);
-    // #endregion
 
     if (!is_string($response) || $status < 200 || $status >= 300) {
         return null;
@@ -70,10 +64,6 @@ function openaiImagePng(
     ];
 
     set_time_limit(max(120, $timeout + 30));
-    // #region agent log
-    $log = json_encode(['sessionId' => '78eac4', 'runId' => 'post-fix-3', 'hypothesisId' => 'H', 'location' => 'api/lib/openai.php:openaiImagePng', 'message' => 'image curl start', 'data' => ['model' => $model, 'timeout' => $timeout, 'maxExec' => ini_get('max_execution_time')], 'timestamp' => (int) (microtime(true) * 1000)]) . "\n";
-    file_put_contents('/Users/shady/Projects/FrameFlux/.cursor/debug-78eac4.log', $log, FILE_APPEND);
-    // #endregion
 
     $ch = curl_init('https://api.openai.com/v1/images/generations');
     curl_setopt_array($ch, [
@@ -89,13 +79,7 @@ function openaiImagePng(
 
     $response = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlErr = curl_error($ch);
     curl_close($ch);
-    // #region agent log
-    $decodedErr = is_string($response) ? json_decode($response, true) : null;
-    $log = json_encode(['sessionId' => '78eac4', 'runId' => 'post-fix', 'hypothesisId' => 'F', 'location' => 'api/lib/openai.php:openaiImagePng', 'message' => 'openai image result', 'data' => ['status' => $status, 'curlErr' => $curlErr, 'model' => $model, 'errType' => $decodedErr['error']['code'] ?? $decodedErr['error']['type'] ?? null, 'errMsg' => isset($decodedErr['error']['message']) ? substr((string) $decodedErr['error']['message'], 0, 160) : null, 'hasB64' => isset($decodedErr['data'][0]['b64_json']), 'hasUrl' => isset($decodedErr['data'][0]['url'])], 'timestamp' => (int) (microtime(true) * 1000)]) . "\n";
-    file_put_contents('/Users/shady/Projects/FrameFlux/.cursor/debug-78eac4.log', $log, FILE_APPEND);
-    // #endregion
 
     if (!is_string($response) || $status < 200 || $status >= 300) {
         return null;
@@ -119,10 +103,6 @@ function openaiImagePng(
     $bytes = curl_exec($img);
     $imgStatus = curl_getinfo($img, CURLINFO_HTTP_CODE);
     curl_close($img);
-    // #region agent log
-    $log = json_encode(['sessionId' => '78eac4', 'runId' => 'post-fix-2', 'hypothesisId' => 'G', 'location' => 'api/lib/openai.php:openaiImagePng', 'message' => 'openai image url fetch', 'data' => ['imgStatus' => $imgStatus, 'bytes' => is_string($bytes) ? strlen($bytes) : 0], 'timestamp' => (int) (microtime(true) * 1000)]) . "\n";
-    file_put_contents('/Users/shady/Projects/FrameFlux/.cursor/debug-78eac4.log', $log, FILE_APPEND);
-    // #endregion
     if (!is_string($bytes) || $bytes === '' || $imgStatus < 200 || $imgStatus >= 300) {
         return null;
     }

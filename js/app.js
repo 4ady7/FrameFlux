@@ -10,8 +10,15 @@ const errorEl = document.querySelector("#error");
 const meta = document.querySelector("#meta");
 const variationsEl = document.querySelector("#variations");
 const posterFrame = document.querySelector("#poster-frame");
-const posterSpinner = document.querySelector("#poster-spinner");
-const posterSpinnerLabel = document.querySelector("#poster-spinner-label");
+const posterFade = document.querySelector("#poster-fade");
+const variationSpinners = document.querySelectorAll(".variation-spinner");
+const variationWaits = document.querySelectorAll(".variation-wait");
+const keyArtOverlay = document.querySelector("#key-art-overlay");
+const keyArtLabel = document.querySelector("#key-art-label");
+const developTeaser = document.querySelector("#develop-teaser");
+const teaserMetaphor = document.querySelector("#teaser-metaphor");
+const teaserMaterial = document.querySelector("#teaser-material");
+const teaserQuote = document.querySelector("#teaser-quote");
 
 const ROLES = ["signature", "hybrid", "alternative"];
 const SEED_SHIFTS = { signature: 0, hybrid: 101, alternative: 211 };
@@ -31,11 +38,19 @@ const GPT_IMAGE_KEY = "frameflux-gpt-image";
 const waitClock = {
   running: false,
   startedAt: 0,
+  plateAt: 0,
   expected: null,
   tickId: 0,
   gptImage: "no",
   mode: "generate",
+  hintDna: null,
   averages: { enabled: 45, disabled: 10 },
+};
+const plateDevelop = {
+  raf: 0,
+  startedAt: 0,
+  speed: 1,
+  last: null,
 };
 
 function useGptImage() {
@@ -140,18 +155,172 @@ function secondsLeftWaiting(elapsed, expected) {
 function formatWaitLabel(elapsed, left) {
   const waited = `${elapsed.toFixed(0)}s waited`;
   if (left === null) {
-    return `Composing poster… ${waited}`;
+    return waited;
   }
   if (left <= 0) {
-    return `Composing poster… ${waited} · finishing`;
+    return `${waited}\nfinishing`;
   }
-  return `Composing poster… ${waited} · ${Math.ceil(left)}s left`;
+  return `${waited}\n${Math.ceil(left)}s left`;
 }
 
-function updateWaitLabel() {
+function setVariationSpinners(isBusy) {
+  variationSpinners.forEach((spinner) => {
+    spinner.hidden = !isBusy;
+  });
+  variationsEl.setAttribute("aria-busy", isBusy ? "true" : "false");
+}
+
+function humanizeDna(value) {
+  return String(value || "")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function clipLine(value, max = 72) {
+  const text = String(value || "").trim();
+  if (!text || text.length <= max) {
+    return text;
+  }
+  return `${text.slice(0, max - 1).replace(/\s+\S*$/, "")}…`;
+}
+
+function dnaCopy(dna) {
+  const semantic = dna?.semantic || {};
+  const concept = dna?.concept || {};
+  return {
+    metaphor: humanizeDna(semantic.visualMetaphor || dna?.visualMetaphor || ""),
+    material: humanizeDna(semantic.material || dna?.material || ""),
+    quote: String(concept.quote || dna?.quote || "").trim(),
+  };
+}
+
+function pipelineStage() {
+  if (!posterFrame.classList.contains("is-developing")) {
+    return "interpreting";
+  }
+  const sincePlate = waitClock.plateAt
+    ? (performance.now() - waitClock.plateAt) / 1000
+    : 0;
+  if (sincePlate < 8) {
+    return "setting";
+  }
+  if (sincePlate < 22) {
+    return "exposing";
+  }
+  return "grading";
+}
+
+function stageLabel(stage, dna) {
+  const { metaphor, material, quote } = dnaCopy(dna);
+  const quoted = clipLine(quote, 64);
+  if (stage === "interpreting") {
+    return metaphor ? `Interpreting the film · ${metaphor}` : "Interpreting the film…";
+  }
+  if (stage === "setting") {
+    return material ? `Setting type · ${material} on the plate` : "Setting type";
+  }
+  if (stage === "exposing") {
+    return quoted ? `Exposing the still · ${quoted}` : "Exposing the still";
+  }
+  if (stage === "grading") {
+    return metaphor ? `Grading · ${metaphor} into the light` : "Grading";
+  }
+  return "Interpreting the film";
+}
+
+function updatePipelineCopy() {
+  const developing = posterFrame.classList.contains("is-developing");
+  const dna = developing ? visualDna : waitClock.hintDna;
+  const label = stageLabel(pipelineStage(), dna);
+  keyArtLabel.textContent = label;
   const elapsed = waitElapsedSeconds();
   const left = secondsLeftWaiting(elapsed, waitClock.expected);
-  posterSpinnerLabel.textContent = formatWaitLabel(elapsed, left);
+  const waitText = formatWaitLabel(elapsed, left);
+  variationWaits.forEach((el) => {
+    el.textContent = waitText;
+  });
+  if (developing) {
+    setStatus(label);
+  }
+}
+
+function showDevelopTeaser(dna) {
+  const { metaphor, material, quote } = dnaCopy(dna);
+  teaserMetaphor.textContent = metaphor || "—";
+  teaserMaterial.textContent = material || "—";
+  if (quote) {
+    teaserQuote.hidden = false;
+    teaserQuote.textContent = `“${quote}”`;
+  } else {
+    teaserQuote.hidden = true;
+    teaserQuote.textContent = "";
+  }
+  developTeaser.hidden = false;
+}
+
+function hideDevelopTeaser() {
+  developTeaser.hidden = true;
+}
+
+function currentDevelop() {
+  return plateDevelop.raf ? plateDevelop.last : null;
+}
+
+function developAt(ms, speed) {
+  const t = ms * (speed || 1);
+  const easeOut = (x) => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 2.4);
+  return {
+    exposure: 0.06 + easeOut(t / 28000) * 0.84,
+    grain: 0.18 + 0.82 * (1 - easeOut(t / 24000)),
+    quote: easeOut((t - 4200) / 7200),
+    title: easeOut((t - 10800) / 8200),
+  };
+}
+
+function stopPlateDevelop() {
+  if (plateDevelop.raf) {
+    cancelAnimationFrame(plateDevelop.raf);
+  }
+  plateDevelop.raf = 0;
+  plateDevelop.last = null;
+}
+
+function startPlateDevelop({ speed = 1 } = {}) {
+  stopPlateDevelop();
+  plateDevelop.speed = speed;
+  plateDevelop.startedAt = performance.now();
+  plateDevelop.last = developAt(0, speed);
+  let lastDraw = 0;
+  if (visualDna) {
+    mainPoster.render(
+      visualDna,
+      seedFor(selectedRole),
+      selectedRole,
+      null,
+      plateDevelop.last
+    );
+  }
+  const tick = () => {
+    const elapsed = performance.now() - plateDevelop.startedAt;
+    plateDevelop.last = developAt(elapsed, plateDevelop.speed);
+    if (elapsed - lastDraw >= 80 && visualDna) {
+      lastDraw = elapsed;
+      mainPoster.render(
+        visualDna,
+        seedFor(selectedRole),
+        selectedRole,
+        null,
+        plateDevelop.last
+      );
+    }
+    plateDevelop.raf = requestAnimationFrame(tick);
+  };
+  plateDevelop.raf = requestAnimationFrame(tick);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 async function loadWaitAverages() {
@@ -186,8 +355,10 @@ function startWaitClock(mode) {
   waitClock.gptImage = useGptImage() ? "yes" : "no";
   waitClock.mode = mode || "generate";
   waitClock.expected = expectedWaitSeconds(waitClock.gptImage === "yes");
-  updateWaitLabel();
-  waitClock.tickId = window.setInterval(updateWaitLabel, 250);
+  waitClock.plateAt = 0;
+  waitClock.hintDna = mode === "improve" || mode === "reimagine" ? visualDna : null;
+  updatePipelineCopy();
+  waitClock.tickId = window.setInterval(updatePipelineCopy, 400);
 }
 
 function stopWaitClock({ ok, title } = {}) {
@@ -208,27 +379,104 @@ function stopWaitClock({ ok, title } = {}) {
     ok: !!ok,
     title: title || "",
   });
-  posterSpinnerLabel.textContent = "Composing poster…";
-  // #region agent log
-  fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'W',location:'js/app.js:stopWaitClock',message:'wait recorded',data:{elapsed,left,gptImage:waitClock.gptImage,mode:waitClock.mode,ok:!!ok},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+  variationWaits.forEach((el) => {
+    el.textContent = "0s waited";
+  });
   return elapsed;
 }
 
 loadWaitAverages();
 
 function setPosterBusy(isBusy, { mode, ok, title } = {}) {
-  posterSpinner.hidden = !isBusy;
-  posterFrame.classList.toggle("is-busy", isBusy);
-  posterSpinner.setAttribute("aria-busy", isBusy ? "true" : "false");
   if (isBusy) {
     startWaitClock(mode);
+    variationsEl.hidden = false;
+    setVariationSpinners(true);
+    keyArtOverlay.hidden = false;
+    hideDevelopTeaser();
+    posterFrame.classList.add("is-busy");
+    posterFrame.classList.remove("is-developing");
+    updatePipelineCopy();
   } else {
+    stopPlateDevelop();
+    setVariationSpinners(false);
+    keyArtOverlay.hidden = true;
+    hideDevelopTeaser();
+    posterFrame.classList.remove("is-busy", "is-developing");
     stopWaitClock({ ok, title });
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'S',location:'js/app.js:setPosterBusy',message:'poster spinner',data:{isBusy,hidden:posterSpinner.hidden},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
+}
+
+function setPlateDeveloping(isDeveloping, { teaser = true, speed = 1 } = {}) {
+  if (isDeveloping) {
+    waitClock.plateAt = performance.now();
+    keyArtOverlay.hidden = false;
+    posterFrame.classList.add("is-developing", "is-busy");
+    if (teaser) {
+      showDevelopTeaser(visualDna);
+    } else {
+      hideDevelopTeaser();
+    }
+    if (!prefersReducedMotion()) {
+      startPlateDevelop({ speed });
+    } else if (visualDna) {
+      mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, null, null);
+    }
+  } else {
+    stopPlateDevelop();
+    keyArtOverlay.hidden = true;
+    hideDevelopTeaser();
+    posterFrame.classList.remove("is-developing");
+  }
+  updatePipelineCopy();
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function posterCanvasEl() {
+  const canvas = mainPoster.canvas();
+  if (canvas && typeof canvas.toDataURL === "function") {
+    return canvas;
+  }
+  return canvas && canvas.elt ? canvas.elt : null;
+}
+
+async function crossfadeKeyArt(image) {
+  const canvas = posterCanvasEl();
+  const duration = prefersReducedMotion() ? 0 : 1400;
+  if (!image || !canvas || duration === 0) {
+    stopPlateDevelop();
+    keyArt = image || null;
+    renderAll();
+    return;
+  }
+  posterFade.hidden = false;
+  posterFade.classList.remove("is-fading");
+  posterFade.src = canvas.toDataURL("image/png");
+  posterFade.style.opacity = "1";
+  stopPlateDevelop();
+  keyArt = image;
+  renderAll();
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+  if (typeof posterFade.animate === "function") {
+    const anim = posterFade.animate([{ opacity: 1 }, { opacity: 0 }], {
+      duration,
+      easing: "ease-in-out",
+      fill: "forwards",
+    });
+    await anim.finished.catch(() => {});
+  } else {
+    posterFade.classList.add("is-fading");
+    await wait(duration);
+  }
+  posterFade.classList.remove("is-fading");
+  posterFade.style.opacity = "";
+  posterFade.hidden = true;
+  posterFade.removeAttribute("src");
 }
 
 function seedFor(role) {
@@ -242,7 +490,7 @@ function renderAll() {
   for (const role of ROLES) {
     thumbs[role].render(visualDna, seedFor(role), role, keyArt);
   }
-  mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, keyArt);
+  mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, keyArt, currentDevelop());
   variationsEl.hidden = false;
   updateSelectionUi();
   const title = visualDna.concept?.title || visualDna.title || "poster";
@@ -278,9 +526,6 @@ async function requestDna({ mode = "generate", previous = null } = {}) {
     body: JSON.stringify(payload),
   });
   const data = await response.json().catch(() => ({}));
-  // #region agent log
-  fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'E',location:'js/app.js:requestDna',message:'generate response',data:{status:response.status,ok:response.ok,source:data.source||null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!response.ok) {
     throw new Error(data.error || "Could not create Visual DNA.");
   }
@@ -289,9 +534,6 @@ async function requestDna({ mode = "generate", previous = null } = {}) {
 
 async function requestImage(dna) {
   if (!useGptImage()) {
-    // #region agent log
-    fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'E',location:'js/app.js:requestImage',message:'image skipped',data:{useGptImage:false},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return null;
   }
   const response = await fetch("api/image.php", {
@@ -300,9 +542,6 @@ async function requestImage(dna) {
     body: JSON.stringify({ dna, useImage: true }),
   });
   const data = await response.json().catch(() => ({}));
-  // #region agent log
-  fetch('http://127.0.0.1:7648/ingest/5ace3a12-def6-4947-b220-deb1d40a8b9e',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'78eac4'},body:JSON.stringify({sessionId:'78eac4',runId:'post-fix',hypothesisId:'E',location:'js/app.js:requestImage',message:'image response',data:{status:response.status,ok:response.ok,source:data.source||null,hasImage:!!data.image,note:data.note||null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!response.ok) {
     return null;
   }
@@ -319,19 +558,45 @@ async function compose({ mode, previous, interpreting }) {
   try {
     setStatus(interpreting);
     visualDna = await requestDna({ mode, previous });
-    setStatus("Creating Visual DNA…");
-    if (useGptImage()) {
-      setStatus("Generating cinematic key art…");
-    }
-    keyArt = await requestImage(visualDna);
-    setStatus("Building FrameFlux variations…");
+    keyArt = null;
     baseSeed = Math.floor(Math.random() * 1_000_000);
     selectedRole = "signature";
-    renderAll();
     showMeta(visualDna);
+    regenerateBtn.disabled = false;
+    downloadBtn.disabled = false;
+    for (const role of ROLES) {
+      thumbs[role].render(visualDna, seedFor(role), role, null);
+    }
+    variationsEl.hidden = false;
+    updateSelectionUi();
+    const title = visualDna.concept?.title || visualDna.title || "poster";
+    posterFrame.querySelector("#poster").setAttribute("aria-label", `Selected ${selectedRole} poster for ${title}`);
     const quote = visualDna.concept?.quote || visualDna.quote || "";
     const mood = visualDna.concept?.mood || visualDna.mood || "";
     const verb = mode === "improve" ? "Improved" : mode === "reimagine" ? "Reimagined" : "New design";
+    if (useGptImage()) {
+      setPlateDeveloping(true, { teaser: true, speed: 1 });
+      const still = await requestImage(visualDna);
+      keyArtOverlay.hidden = true;
+      hideDevelopTeaser();
+      posterFrame.classList.remove("is-developing");
+      if (still) {
+        await crossfadeKeyArt(still);
+        showMeta(visualDna);
+      } else {
+        stopPlateDevelop();
+        renderAll();
+      }
+    } else if (!prefersReducedMotion()) {
+      setPlateDeveloping(true, { teaser: false, speed: 12 });
+      await wait(2800);
+      stopPlateDevelop();
+      keyArtOverlay.hidden = true;
+      posterFrame.classList.remove("is-developing");
+      renderAll();
+    } else {
+      renderAll();
+    }
     setStatus(`${verb}${mood ? ` · ${mood}` : ""}${quote ? ` · “${quote}”` : ""}`);
     ok = true;
   } finally {
@@ -436,7 +701,7 @@ variationsEl.addEventListener("click", (event) => {
     return;
   }
   selectedRole = btn.dataset.role;
-  mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, keyArt);
+  mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, keyArt, currentDevelop());
   updateSelectionUi();
   const title = visualDna.concept?.title || visualDna.title || "poster";
   posterFrame.querySelector("#poster").setAttribute("aria-label", `Selected ${selectedRole} poster for ${title}`);

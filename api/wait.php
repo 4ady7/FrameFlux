@@ -8,14 +8,10 @@ header('X-Content-Type-Options: nosniff');
 $dir = dirname(__DIR__) . '/data';
 $path = $dir . '/generation-waits.csv';
 $headers = [
-    'timestamp',
-    'waited_seconds',
-    'seconds_left',
-    'expected_seconds',
-    'gpt_image',
-    'mode',
-    'ok',
     'title',
+    'runtime',
+    'date',
+    'gpt_image_status',
 ];
 
 function waitCsvAverages(string $path): array
@@ -150,10 +146,5 @@ fputcsv($handle, [
 ], ',', '"', '\\');
 flock($handle, LOCK_UN);
 fclose($handle);
-
-// #region agent log
-$log = json_encode(['sessionId' => '78eac4', 'hypothesisId' => 'W', 'location' => 'api/wait.php', 'message' => 'wait csv append', 'data' => ['waited' => $waited, 'secondsLeft' => $secondsLeft, 'gptImage' => $gptImage, 'mode' => $mode, 'ok' => $ok], 'timestamp' => (int) (microtime(true) * 1000)]) . "\n";
-file_put_contents('/Users/shady/Projects/FrameFlux/.cursor/debug-78eac4.log', $log, FILE_APPEND);
-// #endregion
 
 echo json_encode(['ok' => true, 'path' => 'data/generation-waits.csv']);

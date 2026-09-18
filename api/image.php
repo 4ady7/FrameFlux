@@ -40,10 +40,6 @@ if (!isset($dna['concept']) && isset($data['title'])) {
 $config = framefluxConfig();
 $apiKey = framefluxApiKey($config);
 $model = framefluxImageModel($config);
-// #region agent log
-$log = json_encode(['sessionId' => '78eac4', 'hypothesisId' => 'A', 'location' => 'api/image.php:37', 'message' => 'image api key check', 'data' => ['hasKey' => $apiKey !== '', 'model' => $model], 'timestamp' => (int) (microtime(true) * 1000)]) . "\n";
-file_put_contents('/Users/shady/Projects/FrameFlux/.cursor/debug-78eac4.log', $log, FILE_APPEND);
-// #endregion
 $title = (string) ($dna['concept']['title'] ?? $dna['title'] ?? 'Untitled');
 $timestamp = date('H:i:s');
 $useImage = !array_key_exists('useImage', $data) || $data['useImage'] !== false;
