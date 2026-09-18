@@ -62,6 +62,7 @@ const companion = {
   lineIndex: -1,
   speaking: false,
   speakGen: 0,
+  announced: false,
 };
 
 function companionScript() {
@@ -383,18 +384,26 @@ function showWaitCompanion() {
   if (!waitRail) {
     return;
   }
+  const alreadyOpen = !waitRail.hidden;
   waitRail.hidden = false;
+  if (alreadyOpen) {
+    return;
+  }
   companion.lineIndex = -1;
+  companion.announced = true;
+  const prompt = companionScript().prompt || "Hi, my name is Pulp. Click me!";
   if (waitCompanionLine) {
-    waitCompanionLine.textContent = companionScript().prompt || "Click me.";
+    waitCompanionLine.textContent = prompt;
   }
   if (window.speechSynthesis) {
     window.speechSynthesis.getVoices();
   }
+  speakCompanionLine(prompt);
 }
 
 function hideWaitCompanion() {
   stopCompanionSpeech();
+  companion.announced = false;
   if (waitRail) {
     waitRail.hidden = true;
   }

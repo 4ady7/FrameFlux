@@ -18,8 +18,8 @@ window.FrameFluxCompanion = {
     "I am watching the grain. It is almost a picture.",
     "What quote would you choose for your book cover?",
     "Scratch my ear and it will lock faster... Sorry, that is a lie.",
-    "If you click me again I will pretend the wait is shorter.",
     "How did you come up with the title?",
+    "If you click me again I will pretend the wait is shorter.",
     "How long have you been writing?"
   ],
 };

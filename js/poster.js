@@ -2541,6 +2541,44 @@ function dummySampler() {
   };
 }
 
+function drawEmptyMount(p) {
+  const paper = [232, 224, 210];
+  const ink = [236, 230, 216];
+  const margin = 44;
+  const mark = 22;
+  const gap = 7;
+  const x = margin;
+  const y = margin;
+  const w = POSTER_W - margin * 2;
+  const h = POSTER_H - margin * 2;
+  p.background(12, 10, 8);
+  p.noStroke();
+  p.fill(paper[0], paper[1], paper[2], 22);
+  p.rect(x, y, w, h);
+  p.noFill();
+  p.stroke(ink[0], ink[1], ink[2], 38);
+  p.strokeWeight(1);
+  p.rect(x + 0.5, y + 0.5, w - 1, h - 1);
+  p.stroke(ink[0], ink[1], ink[2], 70);
+  p.strokeWeight(1.15);
+  const corners = [
+    [x, y, -1, -1],
+    [x + w, y, 1, -1],
+    [x, y + h, -1, 1],
+    [x + w, y + h, 1, 1],
+  ];
+  for (const [cx, cy, dx, dy] of corners) {
+    p.line(cx + dx * gap, cy, cx + dx * (gap + mark), cy);
+    p.line(cx, cy + dy * gap, cx, cy + dy * (gap + mark));
+  }
+  p.stroke(ink[0], ink[1], ink[2], 22);
+  p.strokeWeight(0.7);
+  p.line(POSTER_W / 2, y - gap - mark * 0.45, POSTER_W / 2, y - gap);
+  p.line(POSTER_W / 2, y + h + gap, POSTER_W / 2, y + h + gap + mark * 0.45);
+  p.line(x - gap - mark * 0.45, POSTER_H / 2, x - gap, POSTER_H / 2);
+  p.line(x + w + gap, POSTER_H / 2, x + w + gap + mark * 0.45, POSTER_H / 2);
+}
+
 const LIVING_PLATE = {
   geometry: 7,
   atmosphere: 16,
@@ -3028,12 +3066,7 @@ function createPoster(containerId, options = {}) {
 
     p.draw = function draw() {
       if (!current) {
-        p.background(18, 16, 13);
-        p.fill(236, 230, 216, 140);
-        p.textFont("IBM Plex Sans");
-        p.textSize(16);
-        p.textAlign(p.CENTER, p.CENTER);
-        p.text("Your poster will appear here.", POSTER_W / 2, POSTER_H / 2);
+        drawEmptyMount(p);
         return;
       }
 
