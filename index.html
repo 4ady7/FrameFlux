@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Archivo:wght@100;300;400;700;900&family=Caveat:wght@400;500;600;700&family=Cinzel:wght@400;500;700;900&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Jost:wght@200;300;400;500;700&family=Oswald:wght@200;300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,500;0,700;0,900;1,400;1,700&family=Roboto+Slab:wght@100;300;400;700;900&family=Saira+Stencil+One&family=Space+Grotesk:wght@300;400;500;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=print-8" />
+    <link rel="stylesheet" href="css/styles.css?v=print-10" />
   </head>
   <body>
     <div class="grain" aria-hidden="true"></div>
@@ -95,7 +95,9 @@
           <div class="poster-column">
             <div class="frame" id="poster-frame">
               <div id="poster" role="img" aria-label="Selected poster preview"></div>
-              <img id="poster-fade" class="poster-fade" alt="" hidden />
+              <div id="expose-rail" class="expose-rail" hidden>
+                <span id="expose-rail-fill" class="expose-rail-fill"></span>
+              </div>
             </div>
             <p id="key-art-overlay" class="develop-stage" hidden role="status" aria-live="polite">
               <span id="key-art-label">Setting type…</span>
@@ -161,8 +163,8 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/p5@1.11.3/lib/p5.min.js"></script>
-    <script src="js/systems.js?v=nature-3"></script>
-    <script src="js/poster.js?v=nature-3"></script>
-    <script src="js/app.js?v=print-8"></script>
+    <script src="js/systems.js?v=nature-5"></script>
+    <script src="js/poster.js?v=nature-5"></script>
+    <script src="js/app.js?v=print-10"></script>
   </body>
 </html>

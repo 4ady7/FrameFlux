@@ -222,26 +222,33 @@
     p.blendMode(p.BLEND);
   }
 
-  function drawContourField(p, dna, seed, plan) {
+  function drawContourField(p, dna, seed, plan, progress = 1) {
     const pal = dna.palette || {};
     const ink = hexToRgb(pal.text || "#2a241e");
     const energy = Number(dna.semantic?.narrativeEnergy ?? 0.5);
     const density = 0.35 + (1 - Number(dna.composition?.negativeSpace ?? 0.5)) * 0.4;
     const fx = plan.focalX;
     const fy = plan.focalY;
+    const amount = Math.max(0, Math.min(1, progress));
+    if (amount <= 0.001) {
+      return;
+    }
     p.noiseSeed(seed + 21);
     p.noFill();
     p.stroke(ink[0], ink[1], ink[2], 22 + density * 18);
     p.strokeWeight(0.7);
     const levels = Math.floor(7 + density * 8);
+    const shown = amount * levels;
     for (let i = 0; i < levels; i += 1) {
+      const levelProg = Math.max(0, Math.min(1, shown - i));
+      if (levelProg <= 0) {
+        break;
+      }
       const iso = 0.18 + i * (0.62 / levels);
-      p.beginShape();
-      let drawing = false;
+      const verts = [];
       for (let x = 0; x <= W; x += 6) {
         let y = H * (0.08 + iso * 0.84);
         y += (p.noise(x * 0.004, iso * 3, seed * 0.001) - 0.5) * 120 * (0.4 + energy);
-        // Bend around the focal object so the field belongs to the artwork.
         const dx = x / W - fx;
         const dy = y / H - fy;
         const d = Math.hypot(dx, dy * 1.2);
@@ -253,6 +260,16 @@
         const inTitle = u > plan.titleSafe.x && u < plan.titleSafe.x + plan.titleSafe.w && v > plan.titleSafe.y && v < plan.titleSafe.y + plan.titleSafe.h;
         const inQuote = plan.quoteSafe && u > plan.quoteSafe.x && u < plan.quoteSafe.x + plan.quoteSafe.w && v > plan.quoteSafe.y && v < plan.quoteSafe.y + plan.quoteSafe.h;
         if (inTitle || inQuote || y < MARGIN || y > H - MARGIN) {
+          verts.push(null);
+          continue;
+        }
+        verts.push({ x, y });
+      }
+      const count = Math.max(2, Math.floor(verts.length * levelProg));
+      let drawing = false;
+      for (let v = 0; v < count; v += 1) {
+        const pt = verts[v];
+        if (!pt) {
           if (drawing) {
             p.endShape();
             drawing = false;
@@ -263,12 +280,43 @@
           p.beginShape();
           drawing = true;
         }
-        p.vertex(x, y);
+        p.vertex(pt.x, pt.y);
       }
       if (drawing) {
         p.endShape();
       }
     }
+  }
+
+  function drawConstructionGrid(p, dna, plan, alpha = 1) {
+    const a = Math.max(0, Math.min(1, alpha));
+    if (a < 0.01) {
+      return;
+    }
+    const pal = dna.palette || {};
+    const ink = hexToRgb(pal.text || "#2a241e");
+    const acc = hexToRgb(pal.accent || "#c4a574");
+    const g = plan.grid || makeGrid();
+    p.noFill();
+    p.stroke(ink[0], ink[1], ink[2], 22 * a);
+    p.strokeWeight(0.55);
+    for (let i = 0; i < COLS; i += 1) {
+      const col = g.col(i, 1);
+      p.line(col.x, MARGIN, col.x, H - MARGIN);
+      if (i === COLS - 1) {
+        p.line(col.x + col.w, MARGIN, col.x + col.w, H - MARGIN);
+      }
+    }
+    p.stroke(acc[0], acc[1], acc[2], 18 * a);
+    p.strokeWeight(0.45);
+    for (let n = 0; n < 110; n += 6) {
+      const y = g.baseline(n);
+      if (y > H - MARGIN) {
+        break;
+      }
+      p.line(MARGIN, y, W - MARGIN, y);
+    }
+    p.blendMode(p.BLEND);
   }
 
   function frameColor(dna) {
@@ -466,6 +514,7 @@
     artFamily,
     drawTopographyShade,
     drawContourField,
+    drawConstructionGrid,
     drawCentralFrame,
     drawConnectionLines,
     drawStatusColumn,

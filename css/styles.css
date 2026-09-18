@@ -275,26 +275,39 @@ textarea:focus-visible,
   animation: poster-spin 1.35s linear infinite reverse;
 }
 
-.poster-fade {
+.expose-rail {
   position: absolute;
+  top: 14px;
   left: 14px;
   right: 14px;
-  top: 14px;
-  z-index: 1;
-  width: calc(100% - 28px);
-  height: auto;
-  display: block;
+  z-index: 4;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(216, 162, 74, 0.16);
   pointer-events: none;
-  opacity: 1;
-  transition: opacity 1.4s ease;
 }
 
-.poster-fade.is-fading {
-  opacity: 0;
-}
-
-.poster-fade[hidden] {
+.expose-rail[hidden] {
   display: none !important;
+}
+
+.expose-rail-fill {
+  display: block;
+  height: 100%;
+  width: 6%;
+  background: linear-gradient(90deg, rgba(216, 162, 74, 0.2), var(--accent));
+  box-shadow: 0 0 10px rgba(216, 162, 74, 0.45);
+  animation: expose-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes expose-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .poster-column {

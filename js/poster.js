@@ -2281,7 +2281,7 @@ function drawQuotePlate(ctx, rect, strength) {
   ctx.restore();
 }
 
-function drawTypography(p, dna, spec, sampler, seed, typeReveal) {
+function drawTypography(p, dna, spec, sampler, seed, typeReveal, typeBlend) {
   const pal = dnaPalette(dna);
   const ctx = p.drawingContext;
   const colors = {
@@ -2329,7 +2329,17 @@ function drawTypography(p, dna, spec, sampler, seed, typeReveal) {
     h: Math.max(0.04, titleH / POSTER_H),
   };
   const textLum = relativeLuminance(colors.text);
-  const treatment = resolveTitleTreatment(face.structure, sampler, titleRect, textLum);
+  const blendT = typeBlend ? Math.max(0, Math.min(1, Number(typeBlend.t ?? 1))) : 1;
+  const plateSampler = sampler;
+  const artSampler = typeBlend?.artSampler || sampler;
+  const treatmentPlate = resolveTitleTreatment(face.structure, plateSampler, titleRect, textLum);
+  const treatmentArt = typeBlend
+    ? resolveTitleTreatment(face.structure, artSampler, titleRect, textLum)
+    : treatmentPlate;
+  const treatment = {
+    structure: blendT < 0.62 ? treatmentPlate.structure : treatmentArt.structure,
+    scrim: treatmentPlate.scrim + (treatmentArt.scrim - treatmentPlate.scrim) * blendT,
+  };
 
   if (treatment.scrim > 0 && titleA > 0.02) {
     const contrast = dnaProc(dna).contrast || dna.contrast || 0.75;
@@ -2395,25 +2405,36 @@ function drawTypography(p, dna, spec, sampler, seed, typeReveal) {
     w: quoteWidth / POSTER_W,
     h: Math.max(0.02, quoteH / POSTER_H),
   };
-  const quoteLum = localLuminance(sampler, quoteRect);
   const quoteColor = quote.style === "caption" ? colors.accent : colors.text;
+  const quoteLumPlate = localLuminance(plateSampler, quoteRect);
+  const quoteLumArt = typeBlend ? localLuminance(artSampler, quoteRect) : quoteLumPlate;
+  const quoteLum = {
+    mean: quoteLumPlate.mean + (quoteLumArt.mean - quoteLumPlate.mean) * blendT,
+    spread: quoteLumPlate.spread + (quoteLumArt.spread - quoteLumPlate.spread) * blendT,
+  };
   const quoteSeparation = Math.abs(quoteLum.mean - relativeLuminance(quoteColor));
 
-  // Technique belongs to the style; it only escalates when legibility demands it.
-  let technique = quote.legibility;
-  if (technique === "none" && quoteSeparation < 0.3) {
-    technique = "scrim";
-  }
-  if (technique === "scrim" && quoteSeparation < 0.16) {
-    technique = "plate";
-  }
-  if (technique === "shadow" && quoteLum.spread > 0.42 && quoteSeparation < 0.24) {
-    technique = "plate";
+  function quoteTechniqueFor(lum) {
+    const sep = Math.abs(lum.mean - relativeLuminance(quoteColor));
+    let next = quote.legibility;
+    if (next === "none" && sep < 0.3) {
+      next = "scrim";
+    }
+    if (next === "scrim" && sep < 0.16) {
+      next = "plate";
+    }
+    if (next === "shadow" && lum.spread > 0.42 && sep < 0.24) {
+      next = "plate";
+    }
+    if (isLightGround(dna) && (next === "plate" || next === "scrim")) {
+      next = "none";
+    }
+    return next;
   }
 
-  if (isLightGround(dna) && (technique === "plate" || technique === "scrim")) {
-    technique = "none";
-  }
+  const techniquePlate = quoteTechniqueFor(quoteLumPlate);
+  const techniqueArt = typeBlend ? quoteTechniqueFor(quoteLumArt) : techniquePlate;
+  const technique = blendT < 0.62 ? techniquePlate : techniqueArt;
   const measuredWidest = Math.max(
     ...quoteLines.map((l) => measureStyled(ctx, quoteFaceSpec, quoteSize, l)),
     0
@@ -2468,6 +2489,31 @@ function drawTypography(p, dna, spec, sampler, seed, typeReveal) {
   }
 }
 
+function easeInOutCubic(t) {
+  const x = Math.max(0, Math.min(1, t));
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+function drawTransitionVeil(p, t, seed) {
+  const amount = Math.sin(Math.max(0, Math.min(1, t)) * Math.PI);
+  if (amount < 0.02) {
+    return;
+  }
+  p.randomSeed(seed + Math.floor((typeof performance !== "undefined" ? performance.now() : 0) / 80));
+  p.noStroke();
+  const n = Math.floor(220 * amount);
+  for (let i = 0; i < n; i++) {
+    p.fill(228, 218, 198, p.random(10, 70) * amount);
+    p.rect(p.random(POSTER_W), p.random(POSTER_H), p.random(1, 2.4), p.random(1, 2.4));
+  }
+  p.stroke(8, 6, 4, 16 * amount);
+  p.strokeWeight(1);
+  for (let y = 0; y < POSTER_H; y += 3) {
+    p.line(0, y, POSTER_W, y);
+  }
+  p.noStroke();
+}
+
 function drawDevelopVeil(p, develop, seed) {
   const grain = Number(develop.grain ?? 0);
   const exposure = Number(develop.exposure ?? 1);
@@ -2484,6 +2530,130 @@ function drawDevelopVeil(p, develop, seed) {
     p.noStroke();
     p.fill(6, 5, 4, (1 - exposure) * 248);
     p.rect(0, 0, POSTER_W, POSTER_H);
+  }
+}
+
+function dummySampler() {
+  return {
+    at: () => 0.42,
+    edge: () => 0.08,
+    brightest: { u: 0.5, v: 0.42, l: 0.42 },
+  };
+}
+
+function livingGate(elapsed, start, dur) {
+  if (elapsed < start) {
+    return 0;
+  }
+  if (dur <= 0) {
+    return 1;
+  }
+  return easeInOutCubic((elapsed - start) / dur);
+}
+
+function livingLayers(elapsed) {
+  const t = Math.max(0, elapsed);
+  const gridHold = t >= 40 ? 1 - livingGate(t, 40, 1.1) : 1;
+  return {
+    elapsed: t,
+    geometry: livingGate(t, 0, 2.2),
+    wash: livingGate(t, 10, 5),
+    topography: livingGate(t, 10, 8),
+    grid: livingGate(t, 11, 6) * gridHold,
+    anchor: livingGate(t, 20, 5),
+    contour: Math.max(0, Math.min(1, (t - 20) / 10)),
+    specks: livingGate(t, 30, 4),
+    halftone: livingGate(t, 31, 4),
+    type: t >= 40 ? 1 : 0,
+  };
+}
+
+function drawPlateHorizon(p, dna, seed, spec) {
+  const pal = dnaPalette(dna);
+  const secondary = hexToRgb(pal.secondary);
+  const spatial = dnaSemantic(dna).spatial || "isolated";
+  const material = dnaSemantic(dna).material || "paper";
+  const family = grammarFamily(dna);
+  const horizon =
+    spatial === "rising" || spatial === "expanding"
+      ? 0.62
+      : spatial === "claustrophobic" || spatial === "compressed"
+        ? 0.4
+        : spec.id === "off-center-top"
+          ? 0.42
+          : spec.id === "off-center-bottom"
+            ? 0.58
+            : 0.52;
+  if (["adventure", "thriller", "scifi", "horror", "mystery", "historical"].includes(family)) {
+    p.stroke(...secondary, material === "concrete" || material === "stone" ? 55 : 28);
+    p.strokeWeight(1.1);
+    const groundLines = spatial === "expansive" ? 4 : spatial === "claustrophobic" ? 10 : 6;
+    for (let i = 0; i < groundLines; i += 1) {
+      const x = nx(0.06 + i * (0.88 / Math.max(1, groundLines - 1)));
+      p.line(x, ny(horizon), x + (p.noise(i * 0.4) - 0.5) * 36, ny(0.94));
+    }
+    p.noFill();
+    p.stroke(...hexToRgb(pal.accent), 14);
+    p.strokeWeight(1);
+    p.line(0, ny(horizon), POSTER_W, ny(horizon));
+  } else if (family === "romance") {
+    p.noFill();
+    p.stroke(...secondary, 40);
+    p.strokeWeight(1.4);
+    p.beginShape();
+    for (let x = 0; x <= POSTER_W; x += 8) {
+      p.vertex(x, ny(horizon) + Math.sin(x * 0.018) * 10);
+    }
+    p.endShape();
+  }
+}
+
+function drawPlateGeometry(p, dna, seed, spec, alpha) {
+  const pal = dnaPalette(dna);
+  const bg = hexToRgb(pal.background);
+  p.background(...bg);
+  if (alpha < 0.01) {
+    return;
+  }
+  p.noiseSeed(seed);
+  p.randomSeed(seed);
+  const ctx = p.drawingContext;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  if (window.FrameFluxSystems) {
+    window.FrameFluxSystems.drawCentralFrame(p, dna, seed, spec.plan || {});
+  }
+  drawPlateHorizon(p, dna, seed, spec);
+  ctx.restore();
+  p.blendMode(p.BLEND);
+}
+
+function drawPlateAtmosphere(p, dna, seed, spec, wash, topography) {
+  const pal = dnaPalette(dna);
+  const primary = hexToRgb(pal.primary);
+  const secondary = hexToRgb(pal.secondary);
+  const plan = spec.plan;
+  const fx = plan ? plan.focalX : Number(dnaComp(dna).focalX ?? 0.5);
+  const fy = plan ? plan.focalY : Number(dnaComp(dna).focalY ?? 0.42);
+  const material = dnaSemantic(dna).material || "paper";
+  const ctx = p.drawingContext;
+  if (topography > 0.01 && window.FrameFluxSystems) {
+    ctx.save();
+    ctx.globalAlpha *= topography;
+    window.FrameFluxSystems.drawTopographyShade(p, dna, seed, plan || {});
+    ctx.restore();
+    p.blendMode(p.BLEND);
+  }
+  if (wash > 0.01 && (material === "smoke" || material === "dust" || material === "water")) {
+    ctx.save();
+    ctx.globalAlpha *= wash;
+    const haze = ctx.createRadialGradient(nx(fx), ny(fy), 10, nx(fx), ny(fy), POSTER_W * 0.55);
+    const c = material === "water" ? secondary : primary;
+    haze.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},0.28)`);
+    haze.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, 0, POSTER_W, POSTER_H);
+    ctx.restore();
   }
 }
 
@@ -2517,7 +2687,294 @@ function createPoster(containerId, options = {}) {
   let keyArt = null;
   let develop = null;
   let p5Instance = null;
+  let plateBuf = null;
+  let artBuf = null;
+  let maskBuf = null;
+  let liveBuf = null;
+  let expose = null;
+  let exposeRaf = 0;
+  let exposeGen = 0;
+  let livingRaf = 0;
+  let livingGen = 0;
+  let liveCache = {
+    frozen: null,
+    geo: null,
+    atmosphere: null,
+    narrative: null,
+    print: null,
+    typeSampler: null,
+    typeLocked: false,
+  };
   const density = options.pixelDensity || 2;
+
+  function ensureBuf(existing) {
+    if (existing) {
+      return existing;
+    }
+    const g = p5Instance.createGraphics(POSTER_W, POSTER_H);
+    g.pixelDensity(density);
+    g.noLoop();
+    g.textAlign(g.LEFT, g.TOP);
+    return g;
+  }
+
+  function layoutFor(dna, nextSeed) {
+    const grid = window.FrameFluxSystems ? window.FrameFluxSystems.makeGrid() : null;
+    const plan = window.FrameFluxSystems ? window.FrameFluxSystems.compositionPlan(dna, nextSeed, grid) : null;
+    const spec = typeLayout(dna, layoutSpec(dnaComp(dna).layout || dna.layout), plan);
+    return { grid, plan, spec };
+  }
+
+  function livingElapsed() {
+    if (!develop || !develop.living || !develop.startedAt) {
+      return 0;
+    }
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    return Math.max(0, ((now - develop.startedAt) / 1000) * (develop.speed || 1));
+  }
+
+  function resetLiveCache() {
+    liveCache = {
+      frozen: null,
+      geo: null,
+      atmosphere: null,
+      narrative: null,
+      print: null,
+      typeSampler: null,
+      typeLocked: false,
+    };
+  }
+
+  function captureLive(existing, paint) {
+    const g = ensureBuf(existing);
+    g.clear();
+    paint(g);
+    return g;
+  }
+
+  function paintLiving(target, elapsed, { skipType = false } = {}) {
+    const dna = current;
+    const nextSeed = seed;
+    const layers = livingLayers(elapsed);
+    const frozen = liveCache.frozen || layoutFor(dna, nextSeed);
+    liveCache.frozen = frozen;
+    const { plan, spec } = frozen;
+    const fx = plan ? plan.focalX : Number(dnaComp(dna).focalX ?? 0.5);
+    const fy = plan ? plan.focalY : Number(dnaComp(dna).focalY ?? 0.42);
+
+    if (layers.elapsed >= 10 && !liveCache.geo) {
+      liveCache.geo = captureLive(liveCache.geo, (g) => {
+        drawPlateGeometry(g, dna, nextSeed, spec, 1);
+      });
+    }
+    if (layers.elapsed >= 20 && liveCache.geo && !liveCache.atmosphere) {
+      liveCache.atmosphere = captureLive(liveCache.atmosphere, (g) => {
+        g.image(liveCache.geo, 0, 0, POSTER_W, POSTER_H);
+        drawPlateAtmosphere(g, dna, nextSeed, spec, 1, 1);
+      });
+    }
+    if (layers.elapsed >= 30 && liveCache.atmosphere && !liveCache.narrative) {
+      liveCache.narrative = captureLive(liveCache.narrative, (g) => {
+        g.image(liveCache.atmosphere, 0, 0, POSTER_W, POSTER_H);
+        drawNarrativeAnchor(g, dna, nextSeed, fx, fy);
+        if (window.FrameFluxSystems) {
+          window.FrameFluxSystems.drawContourField(g, dna, nextSeed, plan, 1);
+        }
+      });
+    }
+    if (layers.elapsed >= 35 && liveCache.narrative && !liveCache.print) {
+      liveCache.print = captureLive(liveCache.print, (g) => {
+        g.image(liveCache.narrative, 0, 0, POSTER_W, POSTER_H);
+        drawMaterialGrain(g, dna, nextSeed, materialEmphasis(dna, nextSeed));
+        if (window.FrameFluxSystems) {
+          window.FrameFluxSystems.drawPrintFinish(g, dna, nextSeed, dummySampler());
+        }
+      });
+    }
+
+    if (liveCache.print && layers.elapsed >= 35) {
+      target.image(liveCache.print, 0, 0, POSTER_W, POSTER_H);
+    } else if (liveCache.narrative && layers.elapsed >= 30) {
+      target.image(liveCache.narrative, 0, 0, POSTER_W, POSTER_H);
+      if (layers.specks > 0.01) {
+        target.push();
+        target.drawingContext.globalAlpha *= layers.specks;
+        drawMaterialGrain(target, dna, nextSeed, materialEmphasis(dna, nextSeed) * layers.specks);
+        if (window.FrameFluxSystems && layers.halftone > 0.01) {
+          target.drawingContext.globalAlpha *= layers.halftone;
+          window.FrameFluxSystems.drawPrintFinish(target, dna, nextSeed, dummySampler());
+        }
+        target.pop();
+        target.blendMode(target.BLEND);
+      }
+    } else if (liveCache.atmosphere && layers.elapsed >= 20) {
+      target.image(liveCache.atmosphere, 0, 0, POSTER_W, POSTER_H);
+      if (layers.anchor > 0.01) {
+        target.push();
+        target.drawingContext.globalAlpha *= layers.anchor;
+        drawNarrativeAnchor(target, dna, nextSeed, fx, fy);
+        target.pop();
+        target.blendMode(target.BLEND);
+      }
+      if (window.FrameFluxSystems && layers.contour > 0) {
+        window.FrameFluxSystems.drawContourField(target, dna, nextSeed, plan, layers.contour);
+      }
+    } else if (liveCache.geo && layers.elapsed >= 10) {
+      target.image(liveCache.geo, 0, 0, POSTER_W, POSTER_H);
+      drawPlateAtmosphere(target, dna, nextSeed, spec, layers.wash, layers.topography);
+    } else {
+      drawPlateGeometry(target, dna, nextSeed, spec, Math.max(layers.geometry, 0.12));
+    }
+
+    finishFrame(target, dna, spec);
+
+    if (window.FrameFluxSystems && layers.grid > 0.01) {
+      window.FrameFluxSystems.drawConstructionGrid(target, dna, plan, layers.grid);
+    }
+
+    if (skipType || layers.type < 1) {
+      return { plan, spec, layers };
+    }
+
+    if (!liveCache.typeSampler) {
+      liveCache.typeSampler = liveCache.print ? buildSampler(liveCache.print) : dummySampler();
+      liveCache.typeLocked = true;
+    }
+    drawTypography(target, dna, spec, liveCache.typeSampler, nextSeed, { quote: 1, title: 1 }, null);
+    if (window.FrameFluxSystems) {
+      window.FrameFluxSystems.drawRefLabel(target, dna, nextSeed, plan);
+      window.FrameFluxSystems.drawStatusColumn(target, dna, nextSeed, plan);
+    }
+    return { plan, spec, layers };
+  }
+
+  function stopLiving() {
+    livingGen += 1;
+    if (livingRaf) {
+      cancelAnimationFrame(livingRaf);
+      livingRaf = 0;
+    }
+    if (develop) {
+      develop.living = false;
+    }
+  }
+
+  function startLivingLoop() {
+    const gen = ++livingGen;
+    const tick = (now) => {
+      if (gen !== livingGen || !develop || !develop.living || !current) {
+        return;
+      }
+      p5Instance.redraw();
+      const elapsed = livingElapsed();
+      const interval = elapsed >= 20 && elapsed < 30 ? 33 : 55;
+      livingRaf = requestAnimationFrame(function queued(t2) {
+        if (gen !== livingGen) {
+          return;
+        }
+        if (t2 - now < interval) {
+          livingRaf = requestAnimationFrame(queued);
+          return;
+        }
+        tick(t2);
+      });
+    };
+    livingRaf = requestAnimationFrame(tick);
+    p5Instance.redraw();
+  }
+
+  function paintPoster(target, { dna, nextSeed, nextRole, image, nextDevelop, skipType, frozen, typeBlend, typeReveal }) {
+    target.randomSeed(nextSeed);
+    target.noiseSeed(nextSeed);
+    const { plan, spec } = frozen || layoutFor(dna, nextSeed);
+    if (image) {
+      target.background(...hexToRgb(dnaPalette(dna).background));
+      drawKeyArt(target, image, spec);
+      if (window.FrameFluxSystems) {
+        window.FrameFluxSystems.drawTopographyShade(target, dna, nextSeed, plan);
+        window.FrameFluxSystems.drawContourField(target, dna, nextSeed, plan);
+        window.FrameFluxSystems.drawCentralFrame(target, dna, nextSeed, plan);
+      }
+      drawMaterialGrain(target, dna, nextSeed, materialEmphasis(dna, nextSeed) * 0.35);
+    } else {
+      drawCinematicPlate(target, dna, nextSeed, spec);
+    }
+    finishFrame(target, dna, spec);
+    const sampler = buildSampler(target);
+    const intensity = Number(dnaProc(dna).intensity || 0.55);
+    const air = Number(dnaComp(dna).negativeSpace ?? 0.5);
+    target.push();
+    target.blendMode(target.BLEND);
+    for (const layer of patternPlan(dna, nextRole)) {
+      const quiet = spec.mode === "quiet-minimal" ? 0.45 : 1;
+      drawPattern(
+        target,
+        layer.name,
+        dna,
+        nextSeed + layer.seedShift,
+        sampler,
+        spec,
+        layer.weight * (0.55 + intensity * 0.25) * quiet * (1.05 - air * 0.35)
+      );
+    }
+    target.pop();
+    target.blendMode(target.BLEND);
+    if (window.FrameFluxSystems) {
+      window.FrameFluxSystems.drawConnectionLines(target, dna, nextSeed, plan, spec);
+      window.FrameFluxSystems.drawStatusColumn(target, dna, nextSeed, plan);
+    }
+    if (nextDevelop && !image) {
+      drawDevelopVeil(target, nextDevelop, nextSeed);
+    }
+    if (skipType) {
+      return { plan, spec, sampler };
+    }
+    const reveal = typeReveal || (nextDevelop && !image
+      ? { quote: Number(nextDevelop.quote ?? 1), title: Number(nextDevelop.title ?? 1) }
+      : null);
+    drawTypography(target, dna, spec, sampler, nextSeed, reveal, typeBlend);
+    if (window.FrameFluxSystems && (!reveal || reveal.title > 0.55)) {
+      window.FrameFluxSystems.drawRefLabel(target, dna, nextSeed, plan);
+      const afterType = buildSampler(target);
+      window.FrameFluxSystems.drawPrintFinish(target, dna, nextSeed, afterType);
+    }
+    return { plan, spec, sampler };
+  }
+
+  function blitMaskedArt(t, fx, fy) {
+    maskBuf.clear();
+    maskBuf.image(artBuf, 0, 0, POSTER_W, POSTER_H);
+    const ctx = maskBuf.drawingContext;
+    ctx.save();
+    ctx.globalCompositeOperation = "destination-in";
+    const cx = fx * POSTER_W;
+    const cy = fy * POSTER_H;
+    const maxR = Math.sqrt(POSTER_W * POSTER_W + POSTER_H * POSTER_H);
+    const eased = easeInOutCubic(t);
+    const radius = Math.max(8, maxR * (0.03 + eased * 1.18));
+    const inner = Math.max(0, radius * (0.28 + eased * 0.55));
+    const grad = ctx.createRadialGradient(cx, cy, inner, cx, cy, radius);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.58, "rgba(255,255,255,1)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, POSTER_W, POSTER_H);
+    ctx.restore();
+    p5Instance.image(maskBuf, 0, 0, POSTER_W, POSTER_H);
+  }
+
+  function stopExposeLoop() {
+    if (exposeRaf) {
+      cancelAnimationFrame(exposeRaf);
+      exposeRaf = 0;
+    }
+  }
+
+  function cancelExpose() {
+    exposeGen += 1;
+    stopExposeLoop();
+    expose = null;
+  }
 
   const sketch = (p) => {
     p.setup = function setup() {
@@ -2541,79 +2998,161 @@ function createPoster(containerId, options = {}) {
         return;
       }
 
-      p.randomSeed(seed);
-      p.noiseSeed(seed);
-      const grid = window.FrameFluxSystems ? window.FrameFluxSystems.makeGrid() : null;
-      const plan = window.FrameFluxSystems ? window.FrameFluxSystems.compositionPlan(current, seed, grid) : null;
-      const spec = typeLayout(current, layoutSpec(dnaComp(current).layout || current.layout), plan);
-      if (keyArt) {
-        p.background(...hexToRgb(dnaPalette(current).background));
-        drawKeyArt(p, keyArt, spec);
-        if (window.FrameFluxSystems) {
-          window.FrameFluxSystems.drawTopographyShade(p, current, seed, plan);
-          window.FrameFluxSystems.drawContourField(p, current, seed, plan);
-          window.FrameFluxSystems.drawCentralFrame(p, current, seed, plan);
-        }
-        drawMaterialGrain(p, current, seed, materialEmphasis(current, seed) * 0.35);
-      } else {
-        drawCinematicPlate(p, current, seed, spec);
-      }
-      finishFrame(p, current, spec);
-      const sampler = buildSampler(p);
-      const intensity = Number(dnaProc(current).intensity || 0.55);
-      const air = Number(dnaComp(current).negativeSpace ?? 0.5);
-      p.push();
-      p.blendMode(p.BLEND);
-      for (const layer of patternPlan(current, role)) {
-        const quiet = spec.mode === "quiet-minimal" ? 0.45 : 1;
-        drawPattern(
+      if (expose && expose.image) {
+        p.image(plateBuf, 0, 0, POSTER_W, POSTER_H);
+        blitMaskedArt(expose.t, expose.focalX, expose.focalY);
+        drawTransitionVeil(p, expose.t, seed);
+        const t = easeInOutCubic(expose.t);
+        const frozen = expose.spec;
+        const sampler = expose.plateSampler;
+        drawTypography(
           p,
-          layer.name,
           current,
-          seed + layer.seedShift,
+          frozen,
           sampler,
-          spec,
-          layer.weight * (0.55 + intensity * 0.25) * quiet * (1.05 - air * 0.35)
+          seed,
+          null,
+          { t, artSampler: expose.artSampler }
         );
+        if (window.FrameFluxSystems && t > 0.55 && expose.plan) {
+          window.FrameFluxSystems.drawRefLabel(p, current, seed, expose.plan);
+          window.FrameFluxSystems.drawStatusColumn(p, current, seed, expose.plan);
+        }
+        return;
       }
-      p.pop();
-      p.blendMode(p.BLEND);
-      if (window.FrameFluxSystems) {
-        window.FrameFluxSystems.drawConnectionLines(p, current, seed, plan, spec);
-        window.FrameFluxSystems.drawStatusColumn(p, current, seed, plan);
+
+      if (develop && develop.living && !keyArt) {
+        paintLiving(p, livingElapsed());
+        return;
       }
-      if (develop && !keyArt) {
-        drawDevelopVeil(p, develop, seed);
-      }
-      const typeReveal = develop && !keyArt
-        ? { quote: Number(develop.quote ?? 1), title: Number(develop.title ?? 1) }
-        : null;
-      drawTypography(p, current, spec, sampler, seed, typeReveal);
-      if (window.FrameFluxSystems && (!typeReveal || typeReveal.title > 0.55)) {
-        window.FrameFluxSystems.drawRefLabel(p, current, seed, plan);
-        const afterType = buildSampler(p);
-        window.FrameFluxSystems.drawPrintFinish(p, current, seed, afterType);
-      }
+
+      paintPoster(p, {
+        dna: current,
+        nextSeed: seed,
+        nextRole: role,
+        image: keyArt,
+        nextDevelop: develop,
+      });
     };
   };
 
   p5Instance = new p5(sketch, containerId);
 
   return {
-    render(params, nextSeed, nextRole, image, nextDevelop) {
+    render(params, nextSeed, nextRole, image, nextDevelop, opts = {}) {
+      if (opts.cancelExpose !== false) {
+        cancelExpose();
+      }
+      const prevSeed = seed;
+      const prevRole = role;
       current = params;
       seed = nextSeed;
       role = nextRole || "signature";
       keyArt = image || null;
       develop = nextDevelop || null;
+      if (develop && develop.living && !keyArt) {
+        if (prevSeed !== seed || prevRole !== role) {
+          resetLiveCache();
+        }
+        if (!livingRaf) {
+          startLivingLoop();
+        } else {
+          p5Instance.redraw();
+        }
+        return;
+      }
+      stopLiving();
       p5Instance.redraw();
-      // Canvas text does not trigger webfont loading, so redraw once the exact
-      // weights this DNA asked for have arrived.
       ensureTypeFaces(params).then((loaded) => {
-        if (loaded && current === params && !develop) {
+        if (loaded && current === params && !develop && !expose) {
           p5Instance.redraw();
         }
       });
+    },
+    startLiving(params, nextSeed, nextRole, nextDevelop) {
+      cancelExpose();
+      stopLiving();
+      current = params;
+      seed = nextSeed;
+      role = nextRole || "signature";
+      keyArt = null;
+      develop = nextDevelop || { living: true, startedAt: performance.now(), speed: 1 };
+      develop.living = true;
+      if (!develop.startedAt) {
+        develop.startedAt = performance.now();
+      }
+      resetLiveCache();
+      startLivingLoop();
+    },
+    stopLiving,
+    exposeKeyArt(image, { duration = 1400 } = {}) {
+      const elapsed = livingElapsed();
+      stopLiving();
+      cancelExpose();
+      const gen = exposeGen;
+      develop = null;
+      if (!current || !image || duration <= 0) {
+        keyArt = image || null;
+        p5Instance.redraw();
+        return Promise.resolve(!!image);
+      }
+      plateBuf = ensureBuf(plateBuf);
+      artBuf = ensureBuf(artBuf);
+      maskBuf = ensureBuf(maskBuf);
+      const frozen = liveCache.frozen || layoutFor(current, seed);
+      paintLiving(plateBuf, Math.max(elapsed, 0.01), { skipType: true });
+      const artPass = paintPoster(artBuf, {
+        dna: current,
+        nextSeed: seed,
+        nextRole: role,
+        image,
+        nextDevelop: null,
+        skipType: true,
+        frozen,
+      });
+      const typeSampler = liveCache.typeSampler || dummySampler();
+      liveCache.typeSampler = typeSampler;
+      liveCache.typeLocked = true;
+      const fx = frozen.plan ? frozen.plan.focalX : Number(dnaComp(current).focalX ?? 0.5);
+      const fy = frozen.plan ? frozen.plan.focalY : Number(dnaComp(current).focalY ?? 0.42);
+      expose = {
+        image,
+        t: 0,
+        startedAt: typeof performance !== "undefined" ? performance.now() : Date.now(),
+        duration,
+        spec: frozen.spec,
+        plan: frozen.plan,
+        plateSampler: typeSampler,
+        artSampler: typeSampler,
+        focalX: fx,
+        focalY: fy,
+      };
+      p5Instance.redraw();
+      return new Promise((resolve) => {
+        const tick = (now) => {
+          if (gen !== exposeGen || !expose) {
+            resolve(false);
+            return;
+          }
+          const t = Math.max(0, Math.min(1, (now - expose.startedAt) / expose.duration));
+          expose.t = t;
+          p5Instance.redraw();
+          if (t >= 1) {
+            stopExposeLoop();
+            expose = null;
+            keyArt = image;
+            p5Instance.redraw();
+            resolve(true);
+            return;
+          }
+          exposeRaf = requestAnimationFrame(tick);
+        };
+        exposeRaf = requestAnimationFrame(tick);
+      });
+    },
+    cancelExpose,
+    keyArt() {
+      return keyArt;
     },
     loadImage(dataUrl) {
       return new Promise((resolve) => {

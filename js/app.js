@@ -10,7 +10,8 @@ const errorEl = document.querySelector("#error");
 const meta = document.querySelector("#meta");
 const variationsEl = document.querySelector("#variations");
 const posterFrame = document.querySelector("#poster-frame");
-const posterFade = document.querySelector("#poster-fade");
+const exposeRail = document.querySelector("#expose-rail");
+const exposeRailFill = document.querySelector("#expose-rail-fill");
 const variationSpinners = document.querySelectorAll(".variation-spinner");
 const variationWaits = document.querySelectorAll(".variation-wait");
 const keyArtOverlay = document.querySelector("#key-art-overlay");
@@ -32,6 +33,8 @@ const thumbs = {
 
 let visualDna = null;
 let keyArt = null;
+let incomingKeyArt = null;
+let composeJob = 0;
 let baseSeed = Date.now() % 100000;
 let selectedRole = "signature";
 const GPT_IMAGE_KEY = "frameflux-gpt-image";
@@ -202,11 +205,14 @@ function pipelineStage() {
   const sincePlate = waitClock.plateAt
     ? (performance.now() - waitClock.plateAt) / 1000
     : 0;
-  if (sincePlate < 8) {
+  if (sincePlate < 10) {
     return "setting";
   }
-  if (sincePlate < 22) {
+  if (sincePlate < 20) {
     return "exposing";
+  }
+  if (sincePlate < 40) {
+    return "grading";
   }
   return "grading";
 }
@@ -240,8 +246,9 @@ function updatePipelineCopy() {
   variationWaits.forEach((el) => {
     el.textContent = waitText;
   });
-  if (developing) {
-    setStatus(label);
+  if (exposeRailFill && waitClock.expected) {
+    const pct = Math.max(0.06, Math.min(0.94, elapsed / waitClock.expected));
+    exposeRailFill.style.width = `${pct * 100}%`;
   }
 }
 
@@ -264,63 +271,42 @@ function hideDevelopTeaser() {
 }
 
 function currentDevelop() {
-  return plateDevelop.raf ? plateDevelop.last : null;
-}
-
-function developAt(ms, speed) {
-  const t = ms * (speed || 1);
-  const easeOut = (x) => 1 - Math.pow(1 - Math.max(0, Math.min(1, x)), 2.4);
-  return {
-    exposure: 0.06 + easeOut(t / 28000) * 0.84,
-    grain: 0.18 + 0.82 * (1 - easeOut(t / 24000)),
-    quote: easeOut((t - 4200) / 7200),
-    title: easeOut((t - 10800) / 8200),
-  };
+  return plateDevelop.last && plateDevelop.last.living ? plateDevelop.last : null;
 }
 
 function stopPlateDevelop() {
+  if (mainPoster.stopLiving) {
+    mainPoster.stopLiving();
+  }
   if (plateDevelop.raf) {
     cancelAnimationFrame(plateDevelop.raf);
   }
   plateDevelop.raf = 0;
   plateDevelop.last = null;
+  plateDevelop.living = false;
 }
 
 function startPlateDevelop({ speed = 1 } = {}) {
   stopPlateDevelop();
   plateDevelop.speed = speed;
   plateDevelop.startedAt = performance.now();
-  plateDevelop.last = developAt(0, speed);
-  let lastDraw = 0;
-  if (visualDna) {
-    mainPoster.render(
-      visualDna,
-      seedFor(selectedRole),
-      selectedRole,
-      null,
-      plateDevelop.last
-    );
-  }
-  const tick = () => {
-    const elapsed = performance.now() - plateDevelop.startedAt;
-    plateDevelop.last = developAt(elapsed, plateDevelop.speed);
-    if (elapsed - lastDraw >= 80 && visualDna) {
-      lastDraw = elapsed;
-      mainPoster.render(
-        visualDna,
-        seedFor(selectedRole),
-        selectedRole,
-        null,
-        plateDevelop.last
-      );
-    }
-    plateDevelop.raf = requestAnimationFrame(tick);
+  plateDevelop.living = true;
+  plateDevelop.last = {
+    living: true,
+    startedAt: plateDevelop.startedAt,
+    speed,
   };
-  plateDevelop.raf = requestAnimationFrame(tick);
+  if (visualDna) {
+    mainPoster.startLiving(visualDna, seedFor(selectedRole), selectedRole, plateDevelop.last);
+  }
 }
 
-function wait(ms) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function recordWait(entry) {
+  fetch("api/wait.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(entry),
+  }).catch(() => {});
 }
 
 async function loadWaitAverages() {
@@ -336,14 +322,6 @@ async function loadWaitAverages() {
   } catch (err) {
     /* keep defaults */
   }
-}
-
-function recordWait(entry) {
-  fetch("api/wait.php", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(entry),
-  }).catch(() => {});
 }
 
 function startWaitClock(mode) {
@@ -396,6 +374,9 @@ function setPosterBusy(isBusy, { mode, ok, title } = {}) {
     hideDevelopTeaser();
     posterFrame.classList.add("is-busy");
     posterFrame.classList.remove("is-developing");
+    if (exposeRail) {
+      exposeRail.hidden = true;
+    }
     updatePipelineCopy();
   } else {
     stopPlateDevelop();
@@ -403,6 +384,9 @@ function setPosterBusy(isBusy, { mode, ok, title } = {}) {
     keyArtOverlay.hidden = true;
     hideDevelopTeaser();
     posterFrame.classList.remove("is-busy", "is-developing");
+    if (exposeRail) {
+      exposeRail.hidden = true;
+    }
     stopWaitClock({ ok, title });
   }
 }
@@ -412,6 +396,9 @@ function setPlateDeveloping(isDeveloping, { teaser = true, speed = 1 } = {}) {
     waitClock.plateAt = performance.now();
     keyArtOverlay.hidden = false;
     posterFrame.classList.add("is-developing", "is-busy");
+    if (exposeRail) {
+      exposeRail.hidden = false;
+    }
     if (teaser) {
       showDevelopTeaser(visualDna);
     } else {
@@ -427,6 +414,9 @@ function setPlateDeveloping(isDeveloping, { teaser = true, speed = 1 } = {}) {
     keyArtOverlay.hidden = true;
     hideDevelopTeaser();
     posterFrame.classList.remove("is-developing");
+    if (exposeRail) {
+      exposeRail.hidden = true;
+    }
   }
   updatePipelineCopy();
 }
@@ -435,48 +425,43 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function posterCanvasEl() {
-  const canvas = mainPoster.canvas();
-  if (canvas && typeof canvas.toDataURL === "function") {
-    return canvas;
-  }
-  return canvas && canvas.elt ? canvas.elt : null;
+function discardIncomingArt() {
+  incomingKeyArt = null;
+  mainPoster.cancelExpose();
 }
 
-async function crossfadeKeyArt(image) {
-  const canvas = posterCanvasEl();
+function commitIncomingArt() {
+  mainPoster.cancelExpose();
+  if (incomingKeyArt) {
+    keyArt = incomingKeyArt;
+    incomingKeyArt = null;
+  }
+}
+
+async function revealKeyArt(image) {
+  incomingKeyArt = image;
+  keyArtOverlay.hidden = true;
+  hideDevelopTeaser();
+  posterFrame.classList.remove("is-developing");
+  if (exposeRail) {
+    exposeRail.hidden = true;
+  }
   const duration = prefersReducedMotion() ? 0 : 1400;
-  if (!image || !canvas || duration === 0) {
-    stopPlateDevelop();
-    keyArt = image || null;
-    renderAll();
-    return;
-  }
-  posterFade.hidden = false;
-  posterFade.classList.remove("is-fading");
-  posterFade.src = canvas.toDataURL("image/png");
-  posterFade.style.opacity = "1";
-  stopPlateDevelop();
-  keyArt = image;
-  renderAll();
-  await new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  const exposing = mainPoster.exposeKeyArt(image, { duration });
+  requestAnimationFrame(() => {
+    if (incomingKeyArt !== image || !visualDna) {
+      return;
+    }
+    for (const role of ROLES) {
+      thumbs[role].render(visualDna, seedFor(role), role, image);
+    }
   });
-  if (typeof posterFade.animate === "function") {
-    const anim = posterFade.animate([{ opacity: 1 }, { opacity: 0 }], {
-      duration,
-      easing: "ease-in-out",
-      fill: "forwards",
-    });
-    await anim.finished.catch(() => {});
-  } else {
-    posterFade.classList.add("is-fading");
-    await wait(duration);
+  const ok = await exposing;
+  if (ok || incomingKeyArt === image) {
+    keyArt = image;
+    incomingKeyArt = null;
   }
-  posterFade.classList.remove("is-fading");
-  posterFade.style.opacity = "";
-  posterFade.hidden = true;
-  posterFade.removeAttribute("src");
+  showMeta(visualDna);
 }
 
 function seedFor(role) {
@@ -554,11 +539,17 @@ async function requestImage(dna) {
 async function compose({ mode, previous, interpreting }) {
   setError("");
   let ok = false;
+  const job = ++composeJob;
+  discardIncomingArt();
   setPosterBusy(true, { mode });
   try {
     setStatus(interpreting);
     visualDna = await requestDna({ mode, previous });
+    if (job !== composeJob) {
+      return;
+    }
     keyArt = null;
+    incomingKeyArt = null;
     baseSeed = Math.floor(Math.random() * 1_000_000);
     selectedRole = "signature";
     showMeta(visualDna);
@@ -576,32 +567,33 @@ async function compose({ mode, previous, interpreting }) {
     const verb = mode === "improve" ? "Improved" : mode === "reimagine" ? "Reimagined" : "New design";
     if (useGptImage()) {
       setPlateDeveloping(true, { teaser: true, speed: 1 });
+      setStatus("Visual DNA resolved. Synthesizing cinematic key art in background...");
       const still = await requestImage(visualDna);
-      keyArtOverlay.hidden = true;
-      hideDevelopTeaser();
-      posterFrame.classList.remove("is-developing");
+      if (job !== composeJob) {
+        return;
+      }
       if (still) {
-        await crossfadeKeyArt(still);
-        showMeta(visualDna);
+        await revealKeyArt(still);
+        if (job !== composeJob) {
+          return;
+        }
       } else {
         stopPlateDevelop();
         renderAll();
       }
-    } else if (!prefersReducedMotion()) {
-      setPlateDeveloping(true, { teaser: false, speed: 12 });
-      await wait(2800);
-      stopPlateDevelop();
-      keyArtOverlay.hidden = true;
-      posterFrame.classList.remove("is-developing");
-      renderAll();
     } else {
       renderAll();
+    }
+    if (job !== composeJob) {
+      return;
     }
     setStatus(`${verb}${mood ? ` · ${mood}` : ""}${quote ? ` · “${quote}”` : ""}`);
     ok = true;
   } finally {
-    const title = visualDna?.concept?.title || visualDna?.title || filmPayload().title;
-    setPosterBusy(false, { ok, title });
+    if (job === composeJob) {
+      const title = visualDna?.concept?.title || visualDna?.title || filmPayload().title;
+      setPosterBusy(false, { ok, title });
+    }
   }
 }
 
@@ -671,8 +663,22 @@ regenerateBtn.addEventListener("click", () => {
   if (!visualDna) {
     return;
   }
+  const waitingForStill = !keyArt && !incomingKeyArt && posterFrame.classList.contains("is-busy");
+  if (incomingKeyArt) {
+    commitIncomingArt();
+  } else {
+    mainPoster.cancelExpose();
+  }
+  stopPlateDevelop();
   baseSeed = Math.floor(Math.random() * 1_000_000);
-  renderAll();
+  if (waitingForStill && useGptImage()) {
+    startPlateDevelop({ speed: 1 });
+    for (const role of ROLES) {
+      thumbs[role].render(visualDna, seedFor(role), role, null);
+    }
+  } else {
+    renderAll();
+  }
   setStatus("Same Visual DNA" + (keyArt ? " and cinematic still" : "") + ". New procedural execution.");
 });
 
@@ -701,7 +707,20 @@ variationsEl.addEventListener("click", (event) => {
     return;
   }
   selectedRole = btn.dataset.role;
-  mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, keyArt, currentDevelop());
+  if (incomingKeyArt) {
+    commitIncomingArt();
+    stopPlateDevelop();
+    mainPoster.render(visualDna, seedFor(selectedRole), selectedRole, keyArt);
+  } else {
+    mainPoster.render(
+      visualDna,
+      seedFor(selectedRole),
+      selectedRole,
+      keyArt,
+      currentDevelop(),
+      { cancelExpose: false }
+    );
+  }
   updateSelectionUi();
   const title = visualDna.concept?.title || visualDna.title || "poster";
   posterFrame.querySelector("#poster").setAttribute("aria-label", `Selected ${selectedRole} poster for ${title}`);
