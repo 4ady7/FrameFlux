@@ -1,8 +1,8 @@
 window.FrameFluxCompanion = {
   prompt: "Hi, my name is Pulp. Click me!",
   speech: {
-    rate: 0.96,
-    pitch: 1.26,
+    rate: 0.85,
+    pitch: 1.15,
     lang: "en-GB",
     prefer: [
       "Google UK English Female",

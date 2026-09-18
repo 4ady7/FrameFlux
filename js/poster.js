@@ -2548,6 +2548,9 @@ const LIVING_PLATE = {
   print: 29,
   type: 29,
   complete: 38,
+  shadeOut: 35,
+  frameOut: 40,
+  statusOut: 40,
 };
 
 function livingGate(elapsed, start, dur) {
@@ -2564,17 +2567,22 @@ function livingLayers(elapsed) {
   const t = Math.max(0, elapsed);
   const typeAt = LIVING_PLATE.type;
   const gridHold = t >= typeAt ? 1 - livingGate(t, typeAt, 1.1) : 1;
+  const shadeHold = t >= LIVING_PLATE.shadeOut ? 1 - livingGate(t, LIVING_PLATE.shadeOut, 1.2) : 1;
+  const frameHold = t >= LIVING_PLATE.frameOut ? 1 - livingGate(t, LIVING_PLATE.frameOut, 1.1) : 1;
+  const statusHold = t >= LIVING_PLATE.statusOut ? 1 - livingGate(t, LIVING_PLATE.statusOut, 1.1) : 1;
   return {
     elapsed: t,
     geometry: livingGate(t, 0, 1.6),
     wash: livingGate(t, LIVING_PLATE.geometry, 5),
-    topography: livingGate(t, LIVING_PLATE.geometry, 8),
+    topography: livingGate(t, LIVING_PLATE.geometry, 8) * shadeHold,
     grid: livingGate(t, LIVING_PLATE.geometry + 1, 6) * gridHold,
     anchor: livingGate(t, LIVING_PLATE.atmosphere, 5),
     contour: Math.max(0, Math.min(1, (t - LIVING_PLATE.atmosphere) / (LIVING_PLATE.narrative - LIVING_PLATE.atmosphere))),
     specks: livingGate(t, LIVING_PLATE.narrative, LIVING_PLATE.print - LIVING_PLATE.narrative),
     halftone: livingGate(t, LIVING_PLATE.narrative + 0.5, LIVING_PLATE.print - LIVING_PLATE.narrative - 0.5),
     type: t >= typeAt ? 1 : 0,
+    frame: livingGate(t, 0, 1.6) * frameHold,
+    status: t >= typeAt ? statusHold : 0,
   };
 }
 
@@ -2630,10 +2638,19 @@ function drawPlateGeometry(p, dna, seed, spec, alpha) {
   const ctx = p.drawingContext;
   ctx.save();
   ctx.globalAlpha *= alpha;
-  if (window.FrameFluxSystems) {
-    window.FrameFluxSystems.drawCentralFrame(p, dna, seed, spec.plan || {});
-  }
   drawPlateHorizon(p, dna, seed, spec);
+  ctx.restore();
+  p.blendMode(p.BLEND);
+}
+
+function drawLivingFrame(p, dna, seed, plan, alpha) {
+  if (!window.FrameFluxSystems || alpha < 0.01 || !plan) {
+    return;
+  }
+  const ctx = p.drawingContext;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  window.FrameFluxSystems.drawCentralFrame(p, dna, seed, plan);
   ctx.restore();
   p.blendMode(p.BLEND);
 }
@@ -2780,7 +2797,7 @@ function createPoster(containerId, options = {}) {
     if (layers.elapsed >= LIVING_PLATE.atmosphere && liveCache.geo && !liveCache.atmosphere) {
       liveCache.atmosphere = captureLive(liveCache.atmosphere, (g) => {
         g.image(liveCache.geo, 0, 0, POSTER_W, POSTER_H);
-        drawPlateAtmosphere(g, dna, nextSeed, spec, 1, 1);
+        drawPlateAtmosphere(g, dna, nextSeed, spec, 1, 0);
       });
     }
     if (layers.elapsed >= LIVING_PLATE.narrative && liveCache.atmosphere && !liveCache.narrative) {
@@ -2831,10 +2848,15 @@ function createPoster(containerId, options = {}) {
       }
     } else if (liveCache.geo && layers.elapsed >= LIVING_PLATE.geometry) {
       target.image(liveCache.geo, 0, 0, POSTER_W, POSTER_H);
-      drawPlateAtmosphere(target, dna, nextSeed, spec, layers.wash, layers.topography);
+      drawPlateAtmosphere(target, dna, nextSeed, spec, layers.wash, 0);
     } else {
       drawPlateGeometry(target, dna, nextSeed, spec, Math.max(layers.geometry, 0.12));
     }
+
+    if (layers.topography > 0.01) {
+      drawPlateAtmosphere(target, dna, nextSeed, spec, 0, layers.topography);
+    }
+    drawLivingFrame(target, dna, nextSeed, plan, layers.frame);
 
     finishFrame(target, dna, spec);
 
@@ -2853,7 +2875,13 @@ function createPoster(containerId, options = {}) {
     drawTypography(target, dna, spec, liveCache.typeSampler, nextSeed, { quote: 1, title: 1 }, null);
     if (window.FrameFluxSystems) {
       window.FrameFluxSystems.drawRefLabel(target, dna, nextSeed, plan);
-      window.FrameFluxSystems.drawStatusColumn(target, dna, nextSeed, plan);
+      if (layers.status > 0.01) {
+        target.push();
+        target.drawingContext.globalAlpha *= layers.status;
+        window.FrameFluxSystems.drawStatusColumn(target, dna, nextSeed, plan);
+        target.pop();
+        target.blendMode(target.BLEND);
+      }
     }
     return { plan, spec, layers };
   }
@@ -2902,15 +2930,13 @@ function createPoster(containerId, options = {}) {
       target.background(...hexToRgb(dnaPalette(dna).background));
       drawKeyArt(target, image, spec);
       if (window.FrameFluxSystems) {
-        window.FrameFluxSystems.drawTopographyShade(target, dna, nextSeed, plan);
         window.FrameFluxSystems.drawContourField(target, dna, nextSeed, plan);
-        window.FrameFluxSystems.drawCentralFrame(target, dna, nextSeed, plan);
       }
       drawMaterialGrain(target, dna, nextSeed, materialEmphasis(dna, nextSeed) * 0.35);
     } else {
       drawCinematicPlate(target, dna, nextSeed, spec);
+      finishFrame(target, dna, spec);
     }
-    finishFrame(target, dna, spec);
     const sampler = buildSampler(target);
     const intensity = Number(dnaProc(dna).intensity || 0.55);
     const air = Number(dnaComp(dna).negativeSpace ?? 0.5);
@@ -2932,7 +2958,9 @@ function createPoster(containerId, options = {}) {
     target.blendMode(target.BLEND);
     if (window.FrameFluxSystems) {
       window.FrameFluxSystems.drawConnectionLines(target, dna, nextSeed, plan, spec);
-      window.FrameFluxSystems.drawStatusColumn(target, dna, nextSeed, plan);
+      if (!image) {
+        window.FrameFluxSystems.drawStatusColumn(target, dna, nextSeed, plan);
+      }
     }
     if (nextDevelop && !image) {
       drawDevelopVeil(target, nextDevelop, nextSeed);
@@ -3027,7 +3055,6 @@ function createPoster(containerId, options = {}) {
         );
         if (window.FrameFluxSystems && t > 0.55 && expose.plan) {
           window.FrameFluxSystems.drawRefLabel(p, current, seed, expose.plan);
-          window.FrameFluxSystems.drawStatusColumn(p, current, seed, expose.plan);
         }
         return;
       }

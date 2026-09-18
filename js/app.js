@@ -260,6 +260,13 @@ function updatePipelineCopy() {
     const pct = Math.max(0.06, Math.min(0.94, elapsed / waitClock.expected));
     exposeRailFill.style.width = `${pct * 100}%`;
   }
+  if (exposeRail && posterFrame.classList.contains("is-developing")) {
+    const plateElapsed = waitClock.plateAt
+      ? (performance.now() - waitClock.plateAt) / 1000
+      : 0;
+    const hideRailAt = window.FrameFluxPoster?.LIVING_PLATE?.shadeOut ?? 35;
+    exposeRail.hidden = plateElapsed >= hideRailAt;
+  }
 }
 
 function showDevelopTeaser(dna) {
