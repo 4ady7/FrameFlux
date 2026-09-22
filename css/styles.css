@@ -733,6 +733,113 @@ textarea:focus-visible,
   color: var(--ink);
 }
 
+.archive {
+  display: grid;
+  gap: 0.65rem;
+  width: min(100%, 420px);
+}
+
+.archive[hidden] {
+  display: none !important;
+}
+
+.archive-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.8rem;
+  align-items: baseline;
+}
+
+.archive-head h2 {
+  margin: 0;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.archive-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+#archive-clear {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.65rem;
+  font-size: 0.72rem;
+}
+
+#archive-clear:hover,
+#archive-clear:focus-visible {
+  color: var(--ink);
+}
+
+.archive-list {
+  display: flex;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding: 0.1rem 0 0.25rem;
+}
+
+.archive-print {
+  flex: 0 0 92px;
+  display: grid;
+  gap: 0.32rem;
+  padding: 0.4rem;
+  background: #090807;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-align: left;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.archive-print:hover,
+.archive-print:focus-visible {
+  transform: translateY(-4px);
+}
+
+.archive-print[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.archive-thumb {
+  display: block;
+  aspect-ratio: 2 / 3;
+  background: #12100d;
+  overflow: hidden;
+}
+
+.archive-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.archive-title {
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.archive-meta {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .companion-review {
   position: relative;
   z-index: 2;
@@ -825,7 +932,8 @@ textarea:focus-visible,
   }
 
   .wait-rail,
-  .develop-teaser {
+  .develop-teaser,
+  .archive {
     max-width: min(100%, 420px);
   }
 }

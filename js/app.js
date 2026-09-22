@@ -25,6 +25,9 @@ const waitCompanionLine = document.querySelector("#wait-companion-line");
 const teaserMetaphor = document.querySelector("#teaser-metaphor");
 const teaserMaterial = document.querySelector("#teaser-material");
 const teaserQuote = document.querySelector("#teaser-quote");
+const archiveEl = document.querySelector("#archive");
+const archiveList = document.querySelector("#archive-list");
+const archiveClear = document.querySelector("#archive-clear");
 
 const ROLES = ["signature", "hybrid", "alternative"];
 const SEED_SHIFTS = { signature: 0, hybrid: 101, alternative: 211 };
@@ -38,10 +41,12 @@ const thumbs = {
 
 let visualDna = null;
 let keyArt = null;
+let keyArtSrc = null;
 let incomingKeyArt = null;
 let composeJob = 0;
 let baseSeed = Date.now() % 100000;
 let selectedRole = "signature";
+let currentArchiveId = "";
 const GPT_IMAGE_KEY = "frameflux-gpt-image";
 const waitClock = {
   running: false,
@@ -746,6 +751,174 @@ function updateSelectionUi() {
   }
 }
 
+function archiveApi() {
+  return window.FrameFluxArchive || null;
+}
+
+function formatArchiveWhen(ts) {
+  try {
+    return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(new Date(ts));
+  } catch (err) {
+    return "";
+  }
+}
+
+function captureArchivePreview() {
+  const api = archiveApi();
+  if (!api) {
+    return "";
+  }
+  const canvas = thumbs[selectedRole]?.canvas?.() || thumbs.signature?.canvas?.() || mainPoster.canvas?.();
+  return api.captureCanvas(canvas, 160, 0.74);
+}
+
+async function waitPaint() {
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+async function snapshotArchive(mode) {
+  const api = archiveApi();
+  if (!api || !visualDna) {
+    return;
+  }
+  await waitPaint();
+  const film = filmPayload();
+  let still = "";
+  if (keyArtSrc) {
+    still = await api.compress(keyArtSrc, 720, 0.82);
+  }
+  const preview = captureArchivePreview() || still;
+  try {
+    const row = await api.put({
+      id: api.newId(),
+      savedAt: Date.now(),
+      mode: mode || "generate",
+      title: film.title || visualDna.concept?.title || visualDna.title || "Untitled",
+      genre: film.genre,
+      pitch: film.pitch,
+      dna: api.clone(visualDna),
+      seed: baseSeed,
+      role: selectedRole,
+      still: still || null,
+      preview,
+    });
+    currentArchiveId = row.id;
+    await drawArchiveList();
+  } catch (err) {
+    /* private mode / quota */
+  }
+}
+
+function drawArchiveItem(row) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "archive-print";
+  btn.dataset.id = row.id;
+  btn.setAttribute("role", "listitem");
+  btn.setAttribute("aria-pressed", row.id === currentArchiveId ? "true" : "false");
+  const title = row.title || "Untitled";
+  const kind = row.still ? "cinematic still" : "local plate";
+  const when = formatArchiveWhen(row.savedAt);
+  btn.setAttribute("aria-label", `Open archived poster ${title}, ${kind}`);
+  const thumb = document.createElement("span");
+  thumb.className = "archive-thumb";
+  if (row.preview || row.still) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.src = row.preview || row.still;
+    thumb.append(img);
+  }
+  const name = document.createElement("span");
+  name.className = "archive-title";
+  name.textContent = title;
+  const metaLine = document.createElement("span");
+  metaLine.className = "archive-meta";
+  metaLine.textContent = when ? `${kind} · ${when}` : kind;
+  btn.append(thumb, name, metaLine);
+  btn.addEventListener("click", () => {
+    void restoreArchive(row.id);
+  });
+  return btn;
+}
+
+async function drawArchiveList() {
+  if (!archiveEl || !archiveList) {
+    return;
+  }
+  const api = archiveApi();
+  if (!api) {
+    archiveEl.hidden = true;
+    return;
+  }
+  let rows = [];
+  try {
+    rows = await api.list();
+  } catch (err) {
+    archiveEl.hidden = true;
+    return;
+  }
+  archiveEl.hidden = rows.length === 0;
+  archiveList.replaceChildren(...rows.map(drawArchiveItem));
+}
+
+function fillFilmForm(entry) {
+  if (entry.title != null) {
+    document.querySelector("#title").value = entry.title;
+  }
+  if (entry.genre != null) {
+    document.querySelector("#genre").value = entry.genre;
+  }
+  if (entry.pitch != null) {
+    document.querySelector("#pitch").value = entry.pitch;
+  }
+}
+
+async function restoreArchive(id) {
+  const api = archiveApi();
+  if (!api) {
+    return;
+  }
+  const entry = await api.get(id);
+  if (!entry?.dna) {
+    return;
+  }
+  const wasBusy = posterFrame.classList.contains("is-busy");
+  composeJob += 1;
+  discardIncomingArt();
+  fillFilmForm(entry);
+  visualDna = entry.dna;
+  baseSeed = Number(entry.seed) || Date.now() % 100000;
+  selectedRole = ROLES.includes(entry.role) ? entry.role : "signature";
+  keyArtSrc = entry.still || null;
+  keyArt = entry.still ? await mainPoster.loadImage(entry.still) : null;
+  if (!keyArt) {
+    keyArtSrc = null;
+  }
+  currentArchiveId = entry.id;
+  if (wasBusy) {
+    setPosterBusy(false, { ok: false, title: entry.title || "" });
+  }
+  generateBtn.disabled = false;
+  enablePosterActions(true);
+  renderAll();
+  showMeta(visualDna);
+  await drawArchiveList();
+  const kind = keyArt ? "cinematic still" : "local plate";
+  setStatus(`Opened from the archive · ${kind}`);
+  setError("");
+}
+
+async function clearArchive() {
+  const api = archiveApi();
+  if (!api) {
+    return;
+  }
+  await api.clear();
+  currentArchiveId = "";
+  await drawArchiveList();
+  setStatus("Archive cleared.");
+}
+
 function previousPayload() {
   if (!visualDna) {
     return null;
@@ -791,7 +964,11 @@ async function requestImage(dna) {
   if (!data.image) {
     return null;
   }
-  return mainPoster.loadImage(data.image);
+  const image = await mainPoster.loadImage(data.image);
+  if (!image) {
+    return null;
+  }
+  return { image, src: data.image };
 }
 
 async function compose({ mode, previous, interpreting }) {
@@ -807,6 +984,7 @@ async function compose({ mode, previous, interpreting }) {
       return;
     }
     keyArt = null;
+    keyArtSrc = null;
     incomingKeyArt = null;
     baseSeed = Math.floor(Math.random() * 1_000_000);
     selectedRole = "signature";
@@ -830,7 +1008,8 @@ async function compose({ mode, previous, interpreting }) {
         return;
       }
       if (still) {
-        await revealKeyArt(still);
+        keyArtSrc = still.src;
+        await revealKeyArt(still.image);
         if (job !== composeJob) {
           return;
         }
@@ -848,6 +1027,7 @@ async function compose({ mode, previous, interpreting }) {
     }
     setStatus(`${verb}${mood ? ` · ${mood}` : ""}${quote ? ` · “${quote}”` : ""}`);
     ok = true;
+    await snapshotArchive(mode);
   } finally {
     if (job === composeJob) {
       const title = visualDna?.concept?.title || visualDna?.title || filmPayload().title;
@@ -939,6 +1119,9 @@ regenerateBtn.addEventListener("click", () => {
     renderAll();
   }
   setStatus("Same Visual DNA" + (keyArt ? " and cinematic still" : "") + ". New procedural execution.");
+  if (!waitingForStill) {
+    void snapshotArchive("regenerate");
+  }
 });
 
 downloadBtn.addEventListener("click", () => {
@@ -988,6 +1171,11 @@ variationsEl.addEventListener("click", (event) => {
 if (waitCompanion) {
   waitCompanion.addEventListener("click", () => {
     playWaitCompanion();
+  });
+}
+if (archiveClear) {
+  archiveClear.addEventListener("click", () => {
+    void clearArchive();
   });
 }
 if (window.speechSynthesis) {
@@ -1058,4 +1246,5 @@ function mountCompanionReview() {
 }
 
 mountCompanionReview();
+void drawArchiveList();
 
