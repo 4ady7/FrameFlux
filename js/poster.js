@@ -1,5 +1,9 @@
 const POSTER_W = 600;
 const POSTER_H = 900;
+const PRINT_SCALES = {
+  4: { scale: 4, width: 2400, height: 3600, inches: "8×12 in", dpi: 300 },
+  8: { scale: 8, width: 4800, height: 7200, inches: "16×24 in", dpi: 300 },
+};
 
 // Font families keyed by letterform language, with the weights actually loaded
 // in index.html so we never fall back to a synthesised face.
@@ -3241,6 +3245,87 @@ function createPoster(containerId, options = {}) {
     download(filename) {
       p5Instance.saveCanvas(filename, "png");
     },
+    async exportPrint({ scale = 4, filename = "frameflux-print" } = {}) {
+      if (!current || !p5Instance) {
+        return null;
+      }
+      const spec = PRINT_SCALES[scale] || PRINT_SCALES[4];
+      await ensureTypeFaces(current);
+      let g = null;
+      let usedScale = spec.scale;
+      const renderAt = (mul) => {
+        const buf = p5Instance.createGraphics(POSTER_W, POSTER_H);
+        buf.pixelDensity(mul);
+        buf.noLoop();
+        buf.textAlign(buf.LEFT, buf.TOP);
+        if (buf.elt) {
+          buf.elt.style.position = "fixed";
+          buf.elt.style.left = "-9999px";
+          buf.elt.setAttribute("aria-hidden", "true");
+        }
+        paintPoster(buf, {
+          dna: current,
+          nextSeed: seed,
+          nextRole: role,
+          image: keyArt,
+          nextDevelop: null,
+        });
+        const width = buf.elt ? buf.elt.width : POSTER_W * mul;
+        const height = buf.elt ? buf.elt.height : POSTER_H * mul;
+        if (width < POSTER_W * mul || height < POSTER_H * mul) {
+          buf.remove();
+          throw new Error("print-buffer-small");
+        }
+        return buf;
+      };
+      try {
+        try {
+          g = renderAt(spec.scale);
+        } catch (err) {
+          if (spec.scale > 4) {
+            usedScale = 4;
+            g = renderAt(4);
+          } else {
+            throw err;
+          }
+        }
+        const used = PRINT_SCALES[usedScale] || PRINT_SCALES[4];
+        const blob = await new Promise((resolve, reject) => {
+          const canvas = g.elt;
+          if (!canvas || typeof canvas.toBlob !== "function") {
+            reject(new Error("Could not encode print."));
+            return;
+          }
+          canvas.toBlob((file) => {
+            if (file) {
+              resolve(file);
+            } else {
+              reject(new Error("Could not encode print."));
+            }
+          }, "image/png");
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${filename}-${used.width}x${used.height}.png`;
+        link.rel = "noopener";
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return {
+          scale: used.scale,
+          width: used.width,
+          height: used.height,
+          inches: used.inches,
+          dpi: used.dpi,
+        };
+      } finally {
+        if (g) {
+          g.remove();
+        }
+      }
+    },
     hasPoster() {
       return current !== null;
     },
@@ -3252,6 +3337,7 @@ function createPoster(containerId, options = {}) {
 
 window.FrameFluxPoster = {
   LIVING_PLATE,
+  PRINT_SCALES,
   createPoster,
   layoutSpec,
   typeLayout,

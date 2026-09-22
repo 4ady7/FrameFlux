@@ -4,6 +4,8 @@ const improveBtn = document.querySelector("#improve");
 const regenerateBtn = document.querySelector("#regenerate");
 const reimagineBtn = document.querySelector("#reimagine");
 const downloadBtn = document.querySelector("#download");
+const printScale4 = document.querySelector("#print-scale-4");
+const printScale8 = document.querySelector("#print-scale-8");
 const gptImageBtn = document.querySelector("#gpt-image");
 const gptImageState = document.querySelector("#gpt-image-state");
 const statusEl = document.querySelector("#status");
@@ -47,7 +49,10 @@ let composeJob = 0;
 let baseSeed = Date.now() % 100000;
 let selectedRole = "signature";
 let currentArchiveId = "";
+let printScale = 4;
+let printExporting = false;
 const GPT_IMAGE_KEY = "frameflux-gpt-image";
+const PRINT_SCALE_KEY = "frameflux-print-scale";
 const waitClock = {
   running: false,
   startedAt: 0,
@@ -156,11 +161,49 @@ function showMeta(dna) {
   document.querySelector("#meta-source").textContent = sourceLabel + art;
 }
 
+function printScaleSpec(scale) {
+  const table = window.FrameFluxPoster?.PRINT_SCALES || {
+    4: { scale: 4, width: 2400, height: 3600, inches: "8×12 in", dpi: 300 },
+    8: { scale: 8, width: 4800, height: 7200, inches: "16×24 in", dpi: 300 },
+  };
+  return table[scale] || table[4];
+}
+
+function syncPrintScale() {
+  const four = printScale === 4;
+  if (printScale4) {
+    printScale4.setAttribute("aria-pressed", four ? "true" : "false");
+  }
+  if (printScale8) {
+    printScale8.setAttribute("aria-pressed", four ? "false" : "true");
+  }
+}
+
+function setPrintScale(scale) {
+  printScale = scale === 8 ? 8 : 4;
+  syncPrintScale();
+  try {
+    localStorage.setItem(PRINT_SCALE_KEY, String(printScale));
+  } catch (err) {
+    /* ignore quota / private mode */
+  }
+}
+
+try {
+  const storedPrint = localStorage.getItem(PRINT_SCALE_KEY);
+  if (storedPrint === "8" || storedPrint === "4") {
+    printScale = Number(storedPrint);
+  }
+} catch (err) {
+  /* ignore quota / private mode */
+}
+syncPrintScale();
+
 function enablePosterActions(enabled) {
   improveBtn.disabled = !enabled;
   regenerateBtn.disabled = !enabled;
   reimagineBtn.disabled = !enabled;
-  downloadBtn.disabled = !enabled;
+  downloadBtn.disabled = !enabled || printExporting;
 }
 
 function expectedWaitSeconds(gptOn) {
@@ -1124,13 +1167,45 @@ regenerateBtn.addEventListener("click", () => {
   }
 });
 
-downloadBtn.addEventListener("click", () => {
-  if (!visualDna) {
+downloadBtn.addEventListener("click", async () => {
+  if (!visualDna || printExporting) {
     return;
   }
+  if (incomingKeyArt) {
+    commitIncomingArt();
+  }
+  const spec = printScaleSpec(printScale);
   const title = visualDna.concept?.title || visualDna.title || "poster";
-  mainPoster.download(`frameflux-${slugify(title)}-${selectedRole}`);
+  printExporting = true;
+  downloadBtn.disabled = true;
+  setStatus(`Rendering ${spec.width}×${spec.height} print · ${spec.inches} at ${spec.dpi} dpi…`);
+  await new Promise((resolve) => window.setTimeout(resolve, 40));
+  try {
+    const saved = await mainPoster.exportPrint({
+      scale: printScale,
+      filename: `frameflux-${slugify(title)}-${selectedRole}`,
+    });
+    if (!saved) {
+      throw new Error("Nothing to print yet.");
+    }
+    const note = saved.scale < printScale ? " · fell back to 4×" : "";
+    setStatus(`Saved ${saved.width}×${saved.height} print · ${saved.inches} at ${saved.dpi} dpi${note}`);
+  } catch (err) {
+    setError(err.message || "Could not render the print.");
+  } finally {
+    printExporting = false;
+    if (visualDna) {
+      enablePosterActions(true);
+    }
+  }
 });
+
+if (printScale4) {
+  printScale4.addEventListener("click", () => setPrintScale(4));
+}
+if (printScale8) {
+  printScale8.addEventListener("click", () => setPrintScale(8));
+}
 
 gptImageBtn.addEventListener("click", () => {
   const next = !useGptImage();

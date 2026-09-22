@@ -163,6 +163,34 @@ button {
   color: #10141a;
 }
 
+.print-scale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.print-scale-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.print-scale-btn {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 0.45rem 0.7rem;
+  font-size: 0.75rem;
+}
+
+.print-scale-btn[aria-pressed="true"] {
+  color: var(--ink);
+  border-color: var(--download);
+}
+
 .gpt-switch {
   display: flex;
   align-items: center;
