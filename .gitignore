@@ -1,9 +1,22 @@
+# Secrets / configuration
 /config.php
+.env
+.env.*
+!.env.example
+
+# macOS
 .DS_Store
+
+# Logs
 *.log
+
+# IDEs
 .idea/
 .vscode/
+
+# Archives
 FrameFlux.zip
+
+# Runtime/generated files
 cache/
 data/
-

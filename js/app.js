@@ -769,7 +769,7 @@ function variationLayoutLabels(dna) {
   };
   return {
     signature: mode,
-    hybrid: take([layout, place, primary]) || `${mode} mix`,
+    hybrid: keyArt ? "still" : take([layout, place, primary]) || `${mode} mix`,
     alternative: take([place, secondary, layout, primary]) || `${mode} turn`,
   };
 }

@@ -1550,6 +1550,14 @@ function drawKeyArt(p, img, spec) {
   p.image(img, dx, dy, dw, dh);
 }
 
+function drawPureStill(p, img) {
+  const scale = Math.max(POSTER_W / img.width, POSTER_H / img.height);
+  const dw = img.width * scale;
+  const dh = img.height * scale;
+  p.background(9, 8, 7);
+  p.image(img, (POSTER_W - dw) / 2, (POSTER_H - dh) / 2, dw, dh);
+}
+
 function buildSampler(p) {
   const cols = 40;
   const rows = 60;
@@ -2967,6 +2975,10 @@ function createPoster(containerId, options = {}) {
   function paintPoster(target, { dna, nextSeed, nextRole, image, nextDevelop, skipType, frozen, typeBlend, typeReveal }) {
     target.randomSeed(nextSeed);
     target.noiseSeed(nextSeed);
+    if (image && nextRole === "hybrid") {
+      drawPureStill(target, image);
+      return { plan: null, spec: null, sampler: dummySampler() };
+    }
     const { plan, spec } = frozen || layoutFor(dna, nextSeed);
     if (image) {
       target.background(...hexToRgb(dnaPalette(dna).background));
@@ -3166,7 +3178,7 @@ function createPoster(containerId, options = {}) {
       cancelExpose();
       const gen = exposeGen;
       develop = null;
-      if (!current || !image || duration <= 0) {
+      if (!current || !image || duration <= 0 || role === "hybrid") {
         keyArt = image || null;
         p5Instance.redraw();
         return Promise.resolve(!!image);
